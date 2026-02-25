@@ -1,0 +1,26 @@
+{
+  "name": "qme",
+  "version": "1.0.0",
+  "description": "Cross-platform Node CLI",
+  "main": "index.js",
+  "bin": {
+    "qme": "./index.js"
+  },
+  "scripts": {
+    "build:win": "pkg index.js --targets node18-win-x64 --output dist/qme-win.exe"
+  },
+  "pkg": {
+    "targets": [
+      "node18-win-x64",
+      "node18-macos-x64",
+      "node18-linux-x64"
+    ],
+    "scripts": [
+      "index.js",
+      "src/**/*.js"
+    ]
+  },
+  "dependencies": {
+    "chalk": "^4.1.2"
+  }
+}
