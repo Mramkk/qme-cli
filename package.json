@@ -1,5 +1,5 @@
 {
-  "name": "xqme",
+  "name": "@mram/xqme",
   "version": "1.0.0",
   "description": "Cross-platform Node CLI",
   "main": "index.js",
