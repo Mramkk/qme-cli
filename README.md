@@ -1,3 +1,8 @@
+## Installation for use
+```bash
+npm i -g @ramkumarbedia/xqme
+```
+
 ## Installation and Setup
 
 ```bash
