@@ -4,7 +4,7 @@ const chalk = require("chalk");
 const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
-const { runGitSync, runGitReset, runGitLogReset, runGitOpen } = require("./src/git.js");
+const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove } = require("./src/git.js");
 const { generateGitSshKey, getDefaultSshEmail } = require("./src/ssh.js");
 const { askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
@@ -149,6 +149,11 @@ async function main() {
         runArtisan(args.slice(1));
     }
 
+    if (args[0] === "git" && args[1] === "remove") {
+        await runGitRemove();
+        return;
+    }
+
     if (args[0] === "git" && args[1] === "ssh-key") {
         const homeDir = getOptionValue(args, ["--home", "-H"]);
         let comment = getOptionValue(args, ["--comment", "-c"]);
@@ -240,9 +245,15 @@ async function main() {
         return;
     }
 
+    if (args[0] === "git" && args[1] === "init") {
+        const branch = getOptionValue(args, ["--branch", "-b"]);
+        await initializeRepo({ branch, fullGitInit: true });
+        return;
+    }
+
     if (args[0] === "init") {
         const branch = getOptionValue(args, ["--branch", "-b"]);
-        initializeRepo({ branch });
+        await initializeRepo({ branch });
         return;
     }
 

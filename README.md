@@ -37,6 +37,17 @@ Bootstrap repository defaults:
 - stores pull branch in `~/.mycli.json`
 
 ```bash
+qme git init [--branch <branch-name>]
+```
+First-time Git bootstrap flow:
+- works only when current folder is not already a git repository
+- initializes git repository (default branch: `main`) if missing
+- applies qme defaults (`.gitignore`, hooks path, branch config)
+- auto runs `git add -A` and creates first commit (`Initial commit`) when no commits exist
+- asks whether to add remote `origin`, then asks for remote URL
+- runs `git push -u origin <branch>`
+
+```bash
 qme git sync
 ```
 Run commit/pull/push helper flow.
@@ -59,6 +70,11 @@ Show recent commits, browse pages with `n`/`p`, select one commit, then reset to
 qme git open
 ```
 Open the current repository `origin` URL in your default browser (supports GitHub, GitLab, Bitbucket, and other standard git remotes).
+
+```bash
+qme git remove
+```
+Remove `.git` from the current project (asks for `YES` confirmation).
 
 ```bash
 qme git ssh-key [--home <path>] [-c <email>] [-f <tag>]
