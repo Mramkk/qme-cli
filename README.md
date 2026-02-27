@@ -169,7 +169,7 @@ qme hub stop
 ```
 
 27. `qme mail`
-Opens Thunderbird app.
+Opens BlueMail email app.
 ```bash
 qme mail
 ```

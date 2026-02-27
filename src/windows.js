@@ -119,28 +119,8 @@ function buildHubstaffCommand() {
     return `cmd /c ${ifChain} else (exit /b 1)`;
 }
 
-function buildThunderbirdCommand() {
-    const appData = process.env.APPDATA || "";
-    const programData = process.env.ProgramData || "C:\\ProgramData";
-    const programFiles = process.env.ProgramFiles || "C:\\Program Files";
-    const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
-    const localAppData = process.env.LOCALAPPDATA || "";
-    const candidates = [
-        `${appData}\\Microsoft\\Windows\\Start Menu\\Programs\\Thunderbird.lnk`,
-        `${programData}\\Microsoft\\Windows\\Start Menu\\Programs\\Thunderbird.lnk`,
-        `${programFiles}\\Mozilla Thunderbird\\thunderbird.exe`,
-        `${programFilesX86}\\Mozilla Thunderbird\\thunderbird.exe`,
-        `${localAppData}\\Mozilla Thunderbird\\thunderbird.exe`
-    ].filter(Boolean);
-
-    const ifChain = candidates.map((item, idx) => {
-        if (idx === 0) {
-            return `if exist "${item}" (start "" "${item}")`;
-        }
-        return `else if exist "${item}" (start "" "${item}")`;
-    }).join(" ");
-
-    return `cmd /c ${ifChain} else (start "" thunderbird)`;
+function buildBlueMailCommand() {
+    return 'cmd /c start "" "BlueMail:"';
 }
 
 function buildChromeCommand() {
@@ -402,15 +382,15 @@ function runMail() {
         process.exit(1);
     }
 
-    const commandLine = buildThunderbirdCommand();
+    const commandLine = buildBlueMailCommand();
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Thunderbird app not found"));
-            console.log(chalk.yellow("Install Mozilla Thunderbird or add `thunderbird` to PATH."));
+            console.log(chalk.red("❌ BlueMail email app not found"));
+            console.log(chalk.yellow("Install BlueMail or make sure `BlueMail` is available in PATH."));
             process.exit(1);
         }
 
-        console.log(chalk.green("✅ Open Thunderbird app"));
+        console.log(chalk.green("✅ Open BlueMail email app"));
     });
 }
 
