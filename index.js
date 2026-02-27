@@ -283,7 +283,7 @@ async function main() {
     }
 
     if (args[0] === "postman") {
-        runWindowsCommand("postman");
+        runWindowsCommand("postman", [], { fireAndForget: true });
         return;
     }
 
