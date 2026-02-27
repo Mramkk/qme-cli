@@ -20,7 +20,7 @@ const {
 const { getProjectRepoUrl } = require("./src/utils.js");
 const { initializeRepo } = require("./src/init.js");
 const { runArtisan } = require("./src/laravel");
-const { runWindowsCommand, runNotepad, runGoogleChat, runHubstaff, runMail, runXamppStart } = require("./src/windows");
+const { runWindowsCommand, runNotepad, runGoogleChat, runHubstaff, runMail, runXamppStart, runXamppStop } = require("./src/windows");
 const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 
 const args = process.argv.slice(2);
@@ -47,7 +47,7 @@ function runXamppStopByPlatform() {
     }
 
     if (process.platform === "win32") {
-        runWindowsCommand("xamppStop");
+        runXamppStop();
         return;
     }
 
