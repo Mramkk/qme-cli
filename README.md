@@ -54,7 +54,7 @@ Removes `.git` folder after confirmation.
 qme git remove
 ```
 
-8. `qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]`
+8. `qme git ssh-key [--home <path>] [--comment <demo-email>] [--tag <name>]`
 Generate a new RSA 4096 SSH key in your auto-detected platform home directory (`~/.ssh`).
 ```bash
 qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
