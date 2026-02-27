@@ -1,4 +1,4 @@
-const { exec } = require("child_process");
+const { exec, spawn } = require("child_process");
 const http = require("http");
 const path = require("path");
 const fs = require("fs");
@@ -236,7 +236,8 @@ const COMMANDS = {
     }
 };
 
-function runWindowsCommand(action, passthroughArgs = []) {
+function runWindowsCommand(action, passthroughArgs = [], options = {}) {
+    const { fireAndForget = false } = options;
     if (process.platform !== "win32") {
         console.log(chalk.red("❌ This command is only available on Windows"));
         process.exit(1);
@@ -268,6 +269,24 @@ function runWindowsCommand(action, passthroughArgs = []) {
     const commandLine = typeof entry.commandLine === "function"
         ? entry.commandLine()
         : entry.commandLine;
+
+    if (fireAndForget) {
+        try {
+            const child = spawn(commandLine, {
+                shell: true,
+                detached: true,
+                stdio: "ignore",
+                windowsHide: false
+            });
+            child.unref();
+            console.log(chalk.green(`✅ ${entry.description}`));
+            return;
+        } catch (error) {
+            console.log(chalk.red(`❌ Failed to run "${action}"`));
+            console.log(chalk.yellow(error.message));
+            process.exit(1);
+        }
+    }
 
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
