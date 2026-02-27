@@ -55,9 +55,9 @@ qme git remove
 ```
 
 8. `qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]`
-Creates RSA-4096 SSH key (`id_rsa_<tag>`) in the target home folder.
+Generate a new RSA 4096 SSH key in your auto-detected platform home directory (`~/.ssh`).
 ```bash
-qme git ssh-key --home "C:\Users\ADMIN" --comment "dev@example.com" --tag "work"
+qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
 ```
 
 9. `qme config branch <branch-name>`
@@ -221,4 +221,3 @@ Shortcut for `qme xampp stop`.
 ```bash
 qme xstop
 ```
-
