@@ -140,9 +140,10 @@ async function runGitSync() {
         console.log(chalk.green("✅ No local changes"));
         console.log(chalk.yellow(`📦 ` + `Local commits : ${chalk.cyan(localCommitCount)}`));
 
-        // 🔥 If commits exist → directly ask pull
+        // If commits exist, show pull as an explicit menu option.
         if (localCommitCount > 0) {
-            await showPullMenu(remoteBranch, currentBranch);
+            const action = await askFirstMenuAction(false, true);
+            await handleFirstMenuAction(action, remoteBranch, currentBranch);
             return;
         }
 
@@ -174,6 +175,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch) {
     if (action === "stash") {
         await stashChanges(currentBranch);
         await showPullMenu(remoteBranch, currentBranch);
+        return;
+    }
+
+    if (action === "pull") {
+        await doPull(remoteBranch, currentBranch);
         return;
     }
 
