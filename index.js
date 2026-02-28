@@ -120,6 +120,36 @@ function appendNoteText(notePath, text, options = {}) {
     }
 }
 
+function openCurrentPathByPlatform() {
+    if (process.platform === "darwin") {
+        const result = spawnSync("open", ["."], { stdio: "inherit" });
+        if (result.error || result.status !== 0) {
+            console.log(chalk.red("❌ Failed to open current folder in Finder"));
+            if (result.error) {
+                console.log(chalk.yellow(result.error.message));
+            }
+            process.exit(1);
+        }
+        console.log(chalk.green("✅ Opened current folder in Finder"));
+        return;
+    }
+
+    if (process.platform === "win32") {
+        runWindowsCommand("explorer");
+        return;
+    }
+
+    const result = spawnSync("xdg-open", ["."], { stdio: "inherit" });
+    if (result.error || result.status !== 0) {
+        console.log(chalk.red("❌ Failed to open current folder"));
+        if (result.error) {
+            console.log(chalk.yellow(result.error.message));
+        }
+        process.exit(1);
+    }
+    console.log(chalk.green("✅ Opened current folder"));
+}
+
 async function main() {
     if (args[0] === "npm" || args[0] === "npx" || args[0] === "n") {
         const tool = args[0] === "n" ? "npm" : args[0];
@@ -277,6 +307,11 @@ async function main() {
         return;
     }
 
+    if (args[0] === ".") {
+        openCurrentPathByPlatform();
+        return;
+    }
+
     if (args[0] === "path") {
         runWindowsCommand("explorer");
         return;
@@ -383,5 +418,4 @@ async function main() {
 
 main();
 // testing 
-
 
