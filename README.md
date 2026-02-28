@@ -10,6 +10,13 @@ It provides shortcuts for:
 
 Package: `@ramkumarbedia/xqme`
 
+## Install
+
+```bash
+# Global install
+npm i -g @ramkumarbedia/xqme
+```
+
 ## Commands (One by One with Example)
 
 1. `qme init [--branch <branch-name>]`
