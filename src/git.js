@@ -1,4 +1,7 @@
 const { execSync } = require("child_process");
+const fs = require("fs");
+const path = require("path");
+const readline = require("readline");
 const chalk = require("chalk");
 const {
     askFirstMenuAction,
@@ -15,6 +18,20 @@ const { getGitUser, getProjectRepoUrl, getCurrentBranch } = require("./utils.js"
 const { loadOrCreateRepoConfig } = require("./config.js");
 
 const REMOTE = "origin";
+
+function askQuestion(questionText) {
+    return new Promise(resolve => {
+        const rl = readline.createInterface({
+            input: process.stdin,
+            output: process.stdout
+        });
+
+        rl.question(questionText, answer => {
+            rl.close();
+            resolve(answer.trim());
+        });
+    });
+}
 
 function normalizeRepoToHttpUrl(repoUrl) {
     const input = String(repoUrl || "").trim();
@@ -82,6 +99,32 @@ function runGitOpen() {
         console.log(chalk.red("❌ Failed to open browser"));
         console.log(chalk.yellow(error.message));
         console.log(chalk.cyan(browserUrl));
+        process.exit(1);
+    }
+}
+
+async function runGitRemove() {
+    const gitDir = path.join(process.cwd(), ".git");
+    if (!fs.existsSync(gitDir)) {
+        console.log(chalk.yellow("⚠️ No .git folder found in current project"));
+        return;
+    }
+
+    const confirm = (await askQuestion(
+        chalk.yellow("⚠️ This will remove Git history for this project. Type YES to continue: ")
+    )).toUpperCase();
+
+    if (confirm !== "YES") {
+        console.log(chalk.gray("⏹️ Git remove aborted"));
+        return;
+    }
+
+    try {
+        fs.rmSync(gitDir, { recursive: true, force: true });
+        console.log(chalk.green("✅ Removed .git folder from project"));
+    } catch (error) {
+        console.log(chalk.red("❌ Failed to remove .git folder"));
+        console.log(chalk.yellow(error.message));
         process.exit(1);
     }
 }
@@ -487,6 +530,10 @@ function formatGitError(error) {
     const stderr = String(error?.stderr || error?.message || "").trim();
     const text = stderr.toLowerCase();
 
+    if (text.includes("refusing to merge unrelated histories")) {
+        return "unrelated histories between local and remote";
+    }
+
     if (
         text.includes("authentication failed") ||
         text.includes("permission denied") ||
@@ -561,6 +608,8 @@ async function doPull(remoteBranch, currentBranch) {
         console.log(chalk.green("✅ Pull completed"));
     } catch (error) {
         console.log(chalk.red(`❌ Pull failed: ${formatGitError(error)}`));
+        console.log(chalk.yellow(`ℹ️ If this is an unrelated history case, run:`));
+        console.log(chalk.yellow(`   git pull ${REMOTE} ${remoteBranch} --allow-unrelated-histories --no-edit`));
         return;
     }
 
@@ -601,5 +650,6 @@ module.exports = {
     runGitSync,
     runGitReset,
     runGitLogReset,
-    runGitOpen
+    runGitOpen,
+    runGitRemove
 };
