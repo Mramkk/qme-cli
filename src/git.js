@@ -90,10 +90,6 @@ function buildBranchBrowserUrl(repoBaseUrl, branchName) {
     return `${baseUrl}/src/${safeBranch}`;
   }
 
-  if (lowerBase.includes("gitlab.")) {
-    return `${baseUrl}/-/tree/${safeBranch}`;
-  }
-
   return `${baseUrl}/tree/${safeBranch}`;
 }
 
