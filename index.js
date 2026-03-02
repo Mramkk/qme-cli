@@ -537,14 +537,14 @@ async function main() {
             process.exit(1);
         }
 
-        console.log(chalk.cyan("⏹️ Stopping running XAMPP services..."));
-        runWindowsShellSync(`cmd /c if exist "${xamppRoot}\\xampp_stop.exe" ("${xamppRoot}\\xampp_stop.exe") else (exit /b 0)`, {
-            allowFailure: true
-        });
+        console.log(chalk.cyan("⏹️ Stopping related processes before folder rename..."));
         runWindowsShellSync("cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe", {
             allowFailure: true
         });
         runWindowsShellSync("cmd /c sc stop Apache2.4 & sc stop mysql", {
+            allowFailure: true
+        });
+        runWindowsShellSync(`cmd /c if exist "${xamppRoot}\\xampp_stop.exe" ("${xamppRoot}\\xampp_stop.exe") else (exit /b 0)`, {
             allowFailure: true
         });
         await sleep(1500);
