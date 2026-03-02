@@ -24,7 +24,7 @@ function askCommitMessage() {
 }
 
 /* ---------------- FIRST MENU ---------------- */
-function askFirstMenuAction(allowCommit = true) {
+function askFirstMenuAction(allowCommit = true, allowPull = false) {
     return new Promise(resolve => {
         const rl = createRL();
 
@@ -43,6 +43,26 @@ function askFirstMenuAction(allowCommit = true) {
                     const value = answer.trim();
 
                     if (!value || value === "0") resolve("commit");
+                    else if (value === "1") resolve("stash");
+                    else if (value === "2") resolve("log");
+                    else resolve("abort");
+                }
+            );
+            return;
+        }
+
+        if (allowPull) {
+            console.log(chalk.green("  0) Pull"));
+            console.log(chalk.green("  1) Stash"));
+            console.log(chalk.green("  2) Show last commits"));
+            console.log(chalk.green("  3) Abort"));
+            rl.question(
+                chalk.yellow("👉 Choose an option (0/1/2/3) [default: 0]: "),
+                answer => {
+                    rl.close();
+                    const value = answer.trim();
+
+                    if (!value || value === "0") resolve("pull");
                     else if (value === "1") resolve("stash");
                     else if (value === "2") resolve("log");
                     else resolve("abort");
