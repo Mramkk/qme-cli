@@ -6,6 +6,7 @@ It provides shortcuts for:
 - Git initialization and sync flows
 - SSH key generation helpers
 - Windows/macOS utility commands (like Postman, Chrome, XAMPP, and more)
+- Re-open the last active VS Code project quickly with `qme recent`
 - Quick local productivity commands from a single `qme` entry point
 
 Package: `@ramkumarbedia/xqme`
@@ -151,25 +152,37 @@ Opens current folder in File Explorer.
 qme path
 ```
 
-23. `qme postman`
+23. `qme .`
+Opens current folder in Finder (macOS) or File Explorer (Windows).
+```bash
+qme .
+```
+
+24. `qme recent`
+Opens the last active VS Code folder/workspace from VS Code recent state.
+```bash
+qme recent
+```
+
+25. `qme postman`
 Opens Postman (non-blocking).
 ```bash
 qme postman
 ```
 
-24. `qme chrome`
+26. `qme chrome`
 Opens Google Chrome.
 ```bash
 qme chrome
 ```
 
-25. `qme gchat`
+27. `qme gchat`
 Opens Google Chat desktop app.
 ```bash
 qme gchat
 ```
 
-26. `qme hub [start|stop]`
+28. `qme hub [start|stop]`
 Starts or stops Hubstaff app.
 ```bash
 qme hub stop
@@ -181,49 +194,49 @@ Opens BlueMail email app.
 qme mail
 ```
 
-28. `qme notepad [file]`
+30. `qme notepad [file]`
 Opens Notepad, optionally with a target file.
 ```bash
 qme notepad notes.txt
 ```
 
-29. `qme note [text]`
+31. `qme note [text]`
 Without text, opens today note file on Desktop. With text, appends text to today's note file.
 ```bash
 qme note "daily update done"
 ```
 
-30. `qme notes [text]`
+32. `qme notes [text]`
 Alias for `qme note`.
 ```bash
 qme notes "follow up tomorrow"
 ```
 
-31. `qme quit`
+33. `qme quit`
 Force closes apps and shuts down Windows.
 ```bash
 qme quit
 ```
 
-32. `qme xampp start`
+34. `qme xampp start`
 Starts XAMPP (Windows/macOS). On start, qme checks phpMyAdmin readiness.
 ```bash
 qme xampp start
 ```
 
-33. `qme xampp stop`
+35. `qme xampp stop`
 Stops XAMPP (Windows/macOS).
 ```bash
 qme xampp stop
 ```
 
-34. `qme xstart`
+36. `qme xstart`
 Shortcut for `qme xampp start`.
 ```bash
 qme xstart
 ```
 
-35. `qme xstop`
+37. `qme xstop`
 Shortcut for `qme xampp stop`.
 ```bash
 qme xstop
