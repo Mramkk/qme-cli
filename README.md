@@ -50,7 +50,7 @@ qme git log
 ```
 
 6. `qme git open`
-Opens current repository remote URL in browser.
+Opens current repository remote URL in browser at the current branch page.
 ```bash
 qme git open
 ```

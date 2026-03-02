@@ -64,6 +64,23 @@ function normalizeRepoToHttpUrl(repoUrl) {
     return normalized;
 }
 
+function buildBranchBrowserUrl(repoBaseUrl, branchName) {
+    const baseUrl = String(repoBaseUrl || "").trim().replace(/\/+$/, "");
+    const branch = String(branchName || "").trim();
+    if (!baseUrl || !branch || branch === "unknown") {
+        return baseUrl;
+    }
+
+    const safeBranch = encodeURIComponent(branch);
+    const lowerBase = baseUrl.toLowerCase();
+
+    if (lowerBase.includes("bitbucket.org/")) {
+        return `${baseUrl}/src/${safeBranch}`;
+    }
+
+    return `${baseUrl}/tree/${safeBranch}`;
+}
+
 function runGitOpen() {
     try {
         execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -84,21 +101,24 @@ function runGitOpen() {
         console.log(chalk.yellow(`Remote: ${repoUrl}`));
         process.exit(1);
     }
+    const currentBranch = getCurrentBranch();
+    const branchUrl = buildBranchBrowserUrl(browserUrl, currentBranch);
 
     try {
         if (process.platform === "win32") {
-            execSync(`start "" "${browserUrl}"`, { stdio: "ignore", shell: true });
+            execSync(`start "" "${branchUrl}"`, { stdio: "ignore", shell: true });
         } else if (process.platform === "darwin") {
-            execSync(`open "${browserUrl.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
+            execSync(`open "${branchUrl.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
         } else {
-            execSync(`xdg-open "${browserUrl.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
+            execSync(`xdg-open "${branchUrl.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
         }
-        console.log(chalk.green("✅ Opened repository URL in browser"));
-        console.log(chalk.cyan(browserUrl));
+        console.log(chalk.green("✅ Opened repository branch URL in browser"));
+        console.log(chalk.blueBright("🌿 Branch:"), chalk.green(currentBranch || "unknown"));
+        console.log(chalk.cyan(branchUrl));
     } catch (error) {
         console.log(chalk.red("❌ Failed to open browser"));
         console.log(chalk.yellow(error.message));
-        console.log(chalk.cyan(browserUrl));
+        console.log(chalk.cyan(branchUrl));
         process.exit(1);
     }
 }
