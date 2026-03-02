@@ -119,28 +119,8 @@ function buildHubstaffCommand() {
     return `cmd /c ${ifChain} else (exit /b 1)`;
 }
 
-function buildThunderbirdCommand() {
-    const appData = process.env.APPDATA || "";
-    const programData = process.env.ProgramData || "C:\\ProgramData";
-    const programFiles = process.env.ProgramFiles || "C:\\Program Files";
-    const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
-    const localAppData = process.env.LOCALAPPDATA || "";
-    const candidates = [
-        `${appData}\\Microsoft\\Windows\\Start Menu\\Programs\\Thunderbird.lnk`,
-        `${programData}\\Microsoft\\Windows\\Start Menu\\Programs\\Thunderbird.lnk`,
-        `${programFiles}\\Mozilla Thunderbird\\thunderbird.exe`,
-        `${programFilesX86}\\Mozilla Thunderbird\\thunderbird.exe`,
-        `${localAppData}\\Mozilla Thunderbird\\thunderbird.exe`
-    ].filter(Boolean);
-
-    const ifChain = candidates.map((item, idx) => {
-        if (idx === 0) {
-            return `if exist "${item}" (start "" "${item}")`;
-        }
-        return `else if exist "${item}" (start "" "${item}")`;
-    }).join(" ");
-
-    return `cmd /c ${ifChain} else (start "" thunderbird)`;
+function buildBlueMailCommand() {
+    return 'cmd /c start "" "BlueMail:"';
 }
 
 function buildChromeCommand() {
@@ -180,6 +160,20 @@ function canReachHttpUrl(url) {
     });
 }
 
+function isWindowsProcessRunning(imageName) {
+    return new Promise(resolve => {
+        const command = `tasklist /FI "IMAGENAME eq ${imageName}"`;
+        exec(command, { windowsHide: true }, (error, stdout) => {
+            if (error) {
+                resolve(false);
+                return;
+            }
+
+            resolve(stdout.toLowerCase().includes(imageName.toLowerCase()));
+        });
+    });
+}
+
 async function waitForHttpUrl(url, timeoutMs = 60000, pollMs = 1500) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -191,6 +185,20 @@ async function waitForHttpUrl(url, timeoutMs = 60000, pollMs = 1500) {
     }
 
     return false;
+}
+
+async function waitForAnyHttpUrl(urls, timeoutMs = 60000, pollMs = 1500) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        for (const url of urls) {
+            if (await canReachHttpUrl(url)) {
+                return url;
+            }
+        }
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+
+    return "";
 }
 
 const COMMANDS = {
@@ -402,15 +410,15 @@ function runMail() {
         process.exit(1);
     }
 
-    const commandLine = buildThunderbirdCommand();
+    const commandLine = buildBlueMailCommand();
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Thunderbird app not found"));
-            console.log(chalk.yellow("Install Mozilla Thunderbird or add `thunderbird` to PATH."));
+            console.log(chalk.red("❌ BlueMail email app not found"));
+            console.log(chalk.yellow("Install BlueMail or make sure `BlueMail` is available in PATH."));
             process.exit(1);
         }
 
-        console.log(chalk.green("✅ Open Thunderbird app"));
+        console.log(chalk.green("✅ Open BlueMail email app"));
     });
 }
 
@@ -420,25 +428,68 @@ function runXamppStart() {
         process.exit(1);
     }
 
-    const commandLine = buildXamppCommand("xampp_start.exe");
-    exec(commandLine, { windowsHide: false }, async error => {
+    const finishWithPhpMyAdminCheck = async () => {
+        const phpMyAdminUrls = [
+            "http://localhost/phpmyadmin/index.php",
+            "http://localhost:8080/phpmyadmin/index.php"
+        ];
+        const readyUrl = await waitForAnyHttpUrl(phpMyAdminUrls);
+
+        if (!readyUrl) {
+            console.log(chalk.yellow("⚠️ XAMPP started, but phpMyAdmin is still not reachable."));
+            console.log(chalk.yellow(`Try manually after a moment: ${phpMyAdminUrls[0]}`));
+            console.log(chalk.yellow(`Or if Apache is configured for 8080: ${phpMyAdminUrls[1]}`));
+            return;
+        }
+
+        console.log(chalk.green(`✅ phpMyAdmin ready: ${readyUrl}`));
+    };
+
+    isWindowsProcessRunning("httpd.exe").then(httpdRunning => {
+        if (httpdRunning) {
+            console.log(chalk.green("✅ Apache is already running"));
+            finishWithPhpMyAdminCheck();
+            return;
+        }
+
+        const commandLine = buildXamppCommand("xampp_start.exe");
+        exec(commandLine, { windowsHide: false }, async error => {
+            if (error) {
+                console.log(chalk.red("❌ Failed to start XAMPP"));
+                console.log(chalk.yellow(error.message));
+                process.exit(1);
+            }
+
+            console.log(chalk.green("✅ Start XAMPP"));
+            finishWithPhpMyAdminCheck();
+        });
+    });
+}
+
+function runXamppStop() {
+    if (process.platform !== "win32") {
+        console.log(chalk.red("❌ This command is only available on Windows"));
+        process.exit(1);
+    }
+
+    const commandLine = buildXamppCommand("xampp_stop.exe");
+    exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Failed to start XAMPP"));
+            console.log(chalk.red("❌ Failed to stop XAMPP"));
             console.log(chalk.yellow(error.message));
             process.exit(1);
         }
 
-        console.log(chalk.green("✅ Start XAMPP"));
-        const phpMyAdminUrl = "http://localhost/phpmyadmin/index.php";
-        const ready = await waitForHttpUrl(phpMyAdminUrl);
+        console.log(chalk.green("✅ Stop XAMPP"));
+        const cleanupCommand = "cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe";
+        exec(cleanupCommand, { windowsHide: false }, cleanupError => {
+            if (cleanupError) {
+                console.log(chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."));
+                return;
+            }
 
-        if (!ready) {
-            console.log(chalk.yellow("⚠️ XAMPP started, but phpMyAdmin is still not reachable."));
-            console.log(chalk.yellow(`Try manually after a moment: ${phpMyAdminUrl}`));
-            return;
-        }
-
-        console.log(chalk.green(`✅ phpMyAdmin ready: ${phpMyAdminUrl}`));
+            console.log(chalk.green("✅ Forced cleanup for httpd/mysqld/php/xampp-control/git/node/code"));
+        });
     });
 }
 
@@ -448,5 +499,6 @@ module.exports = {
     runGoogleChat,
     runHubstaff,
     runMail,
-    runXamppStart
+    runXamppStart,
+    runXamppStop
 };
