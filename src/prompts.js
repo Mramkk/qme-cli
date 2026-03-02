@@ -150,6 +150,29 @@ function askAfterPullAction(currentBranch) {
     });
 }
 
+function askAfterPushMergeRequestAction(currentBranch, targetBranch) {
+    return new Promise(resolve => {
+        const rl = createRL();
+
+        console.log();
+        rl.question(
+            chalk.yellow(
+                "🔀".padEnd(4, " ")
+                + `Generate merge request URL (${currentBranch} -> ${targetBranch}) and open in browser? (y/N): `
+            ),
+            answer => {
+                rl.close();
+                const value = answer.trim().toLowerCase();
+                if (value === "y" || value === "yes") {
+                    resolve("open");
+                } else {
+                    resolve("skip");
+                }
+            }
+        );
+    });
+}
+
 /* ---------------- STASH MENU ---------------- */
 function askStashMenuAction(stashCount) {
     return new Promise(resolve => {
@@ -330,6 +353,7 @@ module.exports = {
     askFirstMenuAction,
     askPostCommitAction,
     askAfterPullAction,
+    askAfterPushMergeRequestAction,
     askStashMenuAction,
     askResetMenuAction,
     askGitLogCommitSelection,

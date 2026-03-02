@@ -33,7 +33,7 @@ qme git init --branch main
 ```
 
 3. `qme git sync`
-Runs guided commit/pull/push flow.
+Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`) when `project_id` is configured.
 ```bash
 qme git sync
 ```
@@ -74,43 +74,49 @@ Stores pull branch for current repo in qme config.
 qme config branch develop
 ```
 
-10. `qme config export [output-path]`
+10. `qme git repo project id <project-id>`
+Stores Git repository project ID for the current repo in qme config.
+```bash
+qme git repo project id 123
+```
+
+11. `qme config export [output-path]`
 Exports qme config file backup.
 ```bash
 qme config export "D:\backup\mycli-config.json"
 ```
 
-11. `qme config xampp-path [path|--show|-s|--clear]`
+12. `qme config xampp-path [path|--show|-s|--clear]`
 Sets, shows, or clears configured XAMPP location.
 ```bash
 qme config xampp-path "D:\xampp"
 ```
 
-12. `qme config xampp-current [version|--show|-s|--clear]`
+13. `qme config xampp-current [version|--show|-s|--clear]`
 Sets, shows, or clears active XAMPP version label in config.
 ```bash
 qme config xampp-current 8.1
 ```
 
-13. `qme npm <args...>`
+14. `qme npm <args...>`
 Pass-through for npm commands.
 ```bash
 qme npm run dev
 ```
 
-14. `qme n <args...>`
+15. `qme n <args...>`
 Shortcut alias for npm pass-through.
 ```bash
 qme n install
 ```
 
-15. `qme npx <args...>`
+16. `qme npx <args...>`
 Pass-through for npx commands.
 ```bash
 qme npx prisma generate
 ```
 
-16. `qme pa <args...>`
+17. `qme pa <args...>`
 Runs Laravel Artisan with passed arguments.
 ```bash
 qme pa migrate

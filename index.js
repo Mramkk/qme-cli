@@ -11,6 +11,7 @@ const { askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
     exportConfig,
     setRemoteBranchForRepo,
+    setProjectIdForRepo,
     setXamppPath,
     clearXamppPath,
     getXamppPath,
@@ -437,6 +438,36 @@ async function main() {
 
         setRemoteBranchForRepo(repoUrl, branch);
         console.log(chalk.green("✅ Remote branch for this project is now set to:"), chalk.cyan(branch));
+        return;
+    }
+
+    if (
+        args[0] === "git"
+        && args[1] === "repo"
+        && (
+            (args[2] === "project" && args[3] === "id")
+            || args[2] === "project-id"
+            || args[2] === "project_id"
+        )
+    ) {
+        const rawProjectId = args[2] === "project" ? args[4] : args[3];
+        const projectId = Number(rawProjectId);
+
+        if (!rawProjectId || !Number.isInteger(projectId) || projectId <= 0) {
+            console.log(chalk.red("❌ Valid numeric project ID required"));
+            console.log(chalk.yellow("Usage: qme git repo project id <project-id>"));
+            console.log(chalk.yellow("Alias: qme git repo project-id <project-id>"));
+            process.exit(1);
+        }
+
+        const repoUrl = getProjectRepoUrl();
+        if (!repoUrl) {
+            console.log(chalk.red("❌ Not a git repository"));
+            process.exit(1);
+        }
+
+        setProjectIdForRepo(repoUrl, projectId);
+        console.log(chalk.green("✅ Project ID for this repository is now set to:"), chalk.cyan(String(projectId)));
         return;
     }
 
