@@ -201,6 +201,22 @@ async function waitForAnyHttpUrl(urls, timeoutMs = 60000, pollMs = 1500) {
     return "";
 }
 
+function openUrlInBrowser(url) {
+    return new Promise(resolve => {
+        exec(`cmd /c start "" "${url}"`, { windowsHide: false }, error => {
+            if (error) {
+                console.log(chalk.yellow(`⚠️ Could not open browser automatically: ${url}`));
+                console.log(chalk.yellow(error.message));
+                resolve(false);
+                return;
+            }
+
+            console.log(chalk.green(`✅ Opened in browser: ${url}`));
+            resolve(true);
+        });
+    });
+}
+
 const COMMANDS = {
     taskmgr: {
         commandLine: 'cmd /c start "" taskmgr',
@@ -443,6 +459,7 @@ function runXamppStart() {
         }
 
         console.log(chalk.green(`✅ phpMyAdmin ready: ${readyUrl}`));
+        await openUrlInBrowser(readyUrl);
     };
 
     isWindowsProcessRunning("httpd.exe").then(httpdRunning => {

@@ -79,6 +79,18 @@ async function waitForHttpUrl(url, timeoutMs = 60000, pollMs = 1500) {
     return false;
 }
 
+function openUrlInBrowser(url) {
+    exec(`open "${url}"`, { windowsHide: false }, error => {
+        if (error) {
+            console.log(chalk.yellow(`⚠️ Could not open browser automatically: ${url}`));
+            console.log(chalk.yellow(error.message));
+            return;
+        }
+
+        console.log(chalk.green(`✅ Opened in browser: ${url}`));
+    });
+}
+
 function runMacXamppStart() {
     if (process.platform !== "darwin") {
         console.log(chalk.red("❌ This command is only available on macOS"));
@@ -124,6 +136,7 @@ function runMacXamppStart() {
         }
 
         console.log(chalk.green(`✅ phpMyAdmin ready: ${phpMyAdminUrl}`));
+        openUrlInBrowser(phpMyAdminUrl);
     });
 }
 

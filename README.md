@@ -219,7 +219,7 @@ qme quit
 ```
 
 34. `qme xampp start`
-Starts XAMPP (Windows/macOS). On start, qme checks phpMyAdmin readiness.
+Starts XAMPP (Windows/macOS). On start, qme checks phpMyAdmin readiness and opens it in your default browser.
 ```bash
 qme xampp start
 ```
@@ -231,7 +231,7 @@ qme xampp stop
 ```
 
 36. `qme xstart`
-Shortcut for `qme xampp start`.
+Shortcut for `qme xampp start` (including auto-opening phpMyAdmin when ready).
 ```bash
 qme xstart
 ```
