@@ -27,6 +27,111 @@ const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 
 const args = process.argv.slice(2);
 
+function normalizeXamppVersion(version) {
+    return String(version || "")
+        .trim()
+        .replace(/^"+|"+$/g, "")
+        .replace(/^xampp-/i, "");
+}
+
+function runWindowsShellSync(commandLine, options = {}) {
+    const { allowFailure = false, failMessage = "Command failed" } = options;
+    const result = spawnSync(commandLine, {
+        stdio: "inherit",
+        shell: true,
+        windowsHide: false
+    });
+
+    if (result.error) {
+        if (allowFailure) {
+            return false;
+        }
+        console.log(chalk.red(`❌ ${failMessage}`));
+        console.log(chalk.yellow(result.error.message));
+        process.exit(1);
+    }
+
+    if (typeof result.status === "number" && result.status !== 0) {
+        if (allowFailure) {
+            return false;
+        }
+        console.log(chalk.red(`❌ ${failMessage}`));
+        process.exit(result.status);
+    }
+
+    return true;
+}
+
+function runXamppSwitch(requestedVersionRaw) {
+    if (process.platform !== "win32") {
+        console.log(chalk.red("❌ xampp switch is currently supported on Windows"));
+        process.exit(1);
+    }
+
+    const requestedVersion = normalizeXamppVersion(requestedVersionRaw);
+    if (!requestedVersion) {
+        console.log(chalk.red("❌ XAMPP version required"));
+        console.log(chalk.yellow("Usage: qme xampp switch <version>"));
+        process.exit(1);
+    }
+
+    const xamppRoot = getXamppPath() || "D:\\xampp";
+    const currentVersion = normalizeXamppVersion(getXamppCurrentVersion());
+    if (!currentVersion) {
+        console.log(chalk.red("❌ XAMPP current version is not set"));
+        console.log(chalk.yellow("Set it first: qme config xampp-current <version>"));
+        process.exit(1);
+    }
+
+    if (currentVersion.toLowerCase() === requestedVersion.toLowerCase()) {
+        console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already active`));
+        process.exit(0);
+    }
+
+    if (!fs.existsSync(xamppRoot) || !fs.statSync(xamppRoot).isDirectory()) {
+        console.log(chalk.red(`❌ Active XAMPP folder not found: ${xamppRoot}`));
+        process.exit(1);
+    }
+
+    const baseDir = path.dirname(xamppRoot);
+    const currentVersionDir = path.join(baseDir, `xampp-${currentVersion}`);
+    const requestedVersionDir = path.join(baseDir, `xampp-${requestedVersion}`);
+
+    if (!fs.existsSync(requestedVersionDir) || !fs.statSync(requestedVersionDir).isDirectory()) {
+        console.log(chalk.red(`❌ Requested XAMPP folder not found: ${requestedVersionDir}`));
+        process.exit(1);
+    }
+
+    if (fs.existsSync(currentVersionDir)) {
+        console.log(chalk.red(`❌ Destination already exists: ${currentVersionDir}`));
+        console.log(chalk.yellow("Update xampp-current or rename/remove that folder first."));
+        process.exit(1);
+    }
+
+    try {
+        fs.renameSync(xamppRoot, currentVersionDir);
+        try {
+            fs.renameSync(requestedVersionDir, xamppRoot);
+        } catch (swapError) {
+            fs.renameSync(currentVersionDir, xamppRoot);
+            throw swapError;
+        }
+    } catch (error) {
+        console.log(chalk.red("❌ Failed to switch XAMPP folders"));
+        console.log(chalk.yellow(error.message));
+        process.exit(1);
+    }
+
+    setXamppPath(xamppRoot, { silent: true });
+    setXamppCurrentVersion(requestedVersion, { silent: true });
+
+    console.log(chalk.green(`✅ Switched XAMPP from ${currentVersion} to ${requestedVersion}`));
+    console.log(chalk.green(`✅ Active folder: ${xamppRoot}`));
+    console.log(chalk.green(`✅ Previous active folder renamed as: ${currentVersionDir}`));
+    console.log(chalk.green("✅ Starting XAMPP with switched version..."));
+    runXamppStart();
+}
+
 function runXamppStartByPlatform() {
     if (process.platform === "darwin") {
         runMacXamppStart();
@@ -460,6 +565,11 @@ async function main() {
         }
 
         setXamppCurrentVersion(option);
+        return;
+    }
+
+    if (args[0] === "xampp" && args[1] === "switch") {
+        runXamppSwitch(args[2]);
         return;
     }
 

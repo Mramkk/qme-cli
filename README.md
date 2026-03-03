@@ -236,14 +236,21 @@ Stops XAMPP (Windows/macOS).
 qme xampp stop
 ```
 
-36. `qme xstart`
+36. `qme xampp switch <version>`
+Switches active XAMPP folder version on Windows by swapping `D:\xampp` (or configured `xampp-path`) with `xampp-<version>`, updates `xampp-current`, and starts XAMPP.
+```bash
+qme xampp switch 8.2
+```
+
+37. `qme xstart`
 Shortcut for `qme xampp start` (including auto-opening phpMyAdmin when ready).
 ```bash
 qme xstart
 ```
 
-37. `qme xstop`
+38. `qme xstop`
 Shortcut for `qme xampp stop`.
 ```bash
 qme xstop
 ```
+
