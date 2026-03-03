@@ -9,6 +9,7 @@ const {
   askStashMessage,
   askPostCommitAction,
   askAfterPullAction,
+  askAfterPushMergeRequestAction,
   askStashMenuAction,
   askResetMenuAction,
   askGitLogCommitSelection,
@@ -90,11 +91,63 @@ function buildBranchBrowserUrl(repoBaseUrl, branchName) {
     return `${baseUrl}/src/${safeBranch}`;
   }
 
-  if (lowerBase.includes("gitlab.")) {
-    return `${baseUrl}/-/tree/${safeBranch}`;
+  return `${baseUrl}/tree/${safeBranch}`;
+}
+
+function normalizeProjectId(projectId) {
+  const parsed = Number(projectId);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return 0;
+  }
+  return parsed;
+}
+
+function buildGitLabMergeRequestUrl(repoUrl, sourceBranch, targetBranch, projectId) {
+  const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
+  if (!repoBaseUrl) {
+    return "";
   }
 
-  return `${baseUrl}/tree/${safeBranch}`;
+  const source = String(sourceBranch || "").trim();
+  const target = String(targetBranch || "").trim();
+  const pid = normalizeProjectId(projectId);
+  if (!source || !target || !pid) {
+    return "";
+  }
+
+  let hostname = "";
+  try {
+    hostname = new URL(repoBaseUrl).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+
+  if (!hostname.includes("gitlab")) {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+  params.set("utf8", "✓");
+  params.set("merge_request[source_project_id]", String(pid));
+  params.set("merge_request[source_branch]", source);
+  params.set("merge_request[target_project_id]", String(pid));
+  params.set("merge_request[target_branch]", target);
+
+  return `${repoBaseUrl}/merge_requests/new?${params.toString()}`;
+}
+
+function openUrlInBrowser(url) {
+  if (process.platform === "win32") {
+    execSync(`start "" "${url}"`, { stdio: "ignore", shell: true });
+    return;
+  }
+
+  if (process.platform === "darwin") {
+    execSync(`open "${url.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
+    return;
+  }
+
+  execSync(`xdg-open "${url.replace(/"/g, '\\"')}"`, { stdio: "ignore" });
 }
 
 function runGitOpen() {
@@ -229,13 +282,13 @@ async function runGitSync() {
     // If commits exist, show pull as an explicit menu option.
     if (localCommitCount > 0) {
       const action = await askFirstMenuAction(false, true);
-      await handleFirstMenuAction(action, remoteBranch, currentBranch);
+      await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
       return;
     }
 
     // Otherwise show first menu
     const action = await askFirstMenuAction(false);
-    await handleFirstMenuAction(action, remoteBranch, currentBranch);
+    await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
     return;
   }
 
@@ -247,12 +300,12 @@ async function runGitSync() {
   console.log(chalk.cyan(changes));
 
   const action = await askFirstMenuAction(true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
 }
 
 /* ================= HELPERS ================= */
 
-async function handleFirstMenuAction(action, remoteBranch, currentBranch) {
+async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId) {
   if (action === "abort") {
     console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
     process.exit(0);
@@ -260,12 +313,12 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch) {
 
   if (action === "stash") {
     await stashChanges(currentBranch);
-    await showPullMenu(remoteBranch, currentBranch);
+    await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
     return;
   }
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch);
+    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
     return;
   }
 
@@ -278,7 +331,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch) {
     const message = await askCommitMessage();
     const didCommit = commitChanges(message);
     if (didCommit) {
-      await showPullMenu(remoteBranch, currentBranch);
+      await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
     }
   }
 }
@@ -652,18 +705,18 @@ function withTimestampPrefix(message) {
 }
 
 /* ---------- PULL | SKIP ---------- */
-async function showPullMenu(remoteBranch, currentBranch) {
+async function showPullMenu(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askPostCommitAction(currentBranch, remoteBranch);
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch);
+    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
   } else {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Pull skipped"));
   }
 }
 
 /* ---------- PULL → PUSH | SKIP ---------- */
-async function doPull(remoteBranch, currentBranch) {
+async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   console.log(
     chalk.cyan(`⬇️`.padEnd(4, " ") + `Pulling ${REMOTE}/${remoteBranch}...`),
   );
@@ -698,8 +751,57 @@ async function doPull(remoteBranch, currentBranch) {
       stdio: "inherit",
     });
     console.log(chalk.green("✅ Push completed"));
+    await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
     console.log(chalk.red(`❌ Push failed: ${formatGitError(error)}`));
+  }
+}
+
+async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, projectId) {
+  const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
+  const normalizedProjectId = normalizeProjectId(projectId);
+  if (!repoBaseUrl || !normalizedProjectId) {
+    return;
+  }
+
+  let hostname = "";
+  try {
+    hostname = new URL(repoBaseUrl).hostname.toLowerCase();
+  } catch {
+    return;
+  }
+
+  if (!hostname.includes("gitlab")) {
+    return;
+  }
+
+  const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
+  if (action !== "open") {
+    console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
+    return;
+  }
+
+  const mergeRequestUrl = buildGitLabMergeRequestUrl(
+    repoUrl,
+    sourceBranch,
+    targetBranch,
+    normalizedProjectId,
+  );
+
+  if (!mergeRequestUrl) {
+    console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
+    console.log(chalk.yellow("This flow currently supports GitLab remotes with a valid project_id."));
+    return;
+  }
+
+  try {
+    openUrlInBrowser(mergeRequestUrl);
+    console.log(chalk.green("✅ Opened merge request URL in browser"));
+    console.log(chalk.cyan(mergeRequestUrl));
+  } catch (error) {
+    console.log(chalk.red("❌ Failed to open merge request URL in browser"));
+    console.log(chalk.yellow(error.message));
+    console.log(chalk.cyan(mergeRequestUrl));
   }
 }
 

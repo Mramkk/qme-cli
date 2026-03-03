@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const CONFIG_PATH = path.join(os.homedir(), ".mycli.json");
+const CONFIG_PATH = path.join(os.homedir(), ".qme-cli.json");
 const DEFAULT_BRANCH = "main";
 
 function loadRawConfig() {
@@ -49,9 +49,15 @@ function loadOrCreateRepoConfig(repoUrl) {
         saveRawConfig(config);
     }
 
+    if (!config.repos[repoUrl].remoteBranch) {
+        config.repos[repoUrl].remoteBranch = DEFAULT_BRANCH;
+        saveRawConfig(config);
+    }
+
     return {
         repoUrl,
-        remoteBranch: config.repos[repoUrl].remoteBranch
+        remoteBranch: config.repos[repoUrl].remoteBranch,
+        project_id: config.repos[repoUrl].project_id
     };
 }
 
@@ -71,6 +77,25 @@ function setRemoteBranchForRepo(repoUrl, branch) {
     saveRawConfig(config);
 
     console.log(`✅ Remote pull branch set to: ${branch}`);
+    console.log(`🔗 Repo: ${repoUrl}`);
+    console.log(`📄 Config updated: ${CONFIG_PATH}`);
+}
+
+function setProjectIdForRepo(repoUrl, projectId) {
+    const config = loadRawConfig();
+
+    if (!config.repos) {
+        config.repos = {};
+    }
+
+    if (!config.repos[repoUrl]) {
+        config.repos[repoUrl] = {};
+    }
+
+    config.repos[repoUrl].project_id = projectId;
+    saveRawConfig(config);
+
+    console.log(`✅ Project ID set to: ${projectId}`);
     console.log(`🔗 Repo: ${repoUrl}`);
     console.log(`📄 Config updated: ${CONFIG_PATH}`);
 }
@@ -186,6 +211,7 @@ module.exports = {
     getConfigPath,
     loadOrCreateRepoConfig,
     setRemoteBranchForRepo,
+    setProjectIdForRepo,
     exportConfig,
     setXamppPath,
     clearXamppPath,

@@ -11,6 +11,7 @@ const { askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
     exportConfig,
     setRemoteBranchForRepo,
+    setProjectIdForRepo,
     setXamppPath,
     clearXamppPath,
     getXamppPath,
@@ -61,27 +62,74 @@ function runWindowsShellSync(commandLine, options = {}) {
     return true;
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function renameWithRetry(fromPath, toPath, options = {}) {
-    const { retries = 20, delayMs = 500 } = options;
-    let lastError = null;
-
-    for (let i = 0; i < retries; i += 1) {
-        try {
-            fs.renameSync(fromPath, toPath);
-            return;
-        } catch (error) {
-            lastError = error;
-            if (i < retries - 1) {
-                await sleep(delayMs);
-            }
-        }
+function runXamppSwitch(requestedVersionRaw) {
+    if (process.platform !== "win32") {
+        console.log(chalk.red("❌ xampp switch is currently supported on Windows"));
+        process.exit(1);
     }
 
-    throw lastError || new Error(`Failed to rename ${fromPath} -> ${toPath}`);
+    const requestedVersion = normalizeXamppVersion(requestedVersionRaw);
+    if (!requestedVersion) {
+        console.log(chalk.red("❌ XAMPP version required"));
+        console.log(chalk.yellow("Usage: qme xampp switch <version>"));
+        process.exit(1);
+    }
+
+    const xamppRoot = getXamppPath() || "D:\\xampp";
+    const currentVersion = normalizeXamppVersion(getXamppCurrentVersion());
+    if (!currentVersion) {
+        console.log(chalk.red("❌ XAMPP current version is not set"));
+        console.log(chalk.yellow("Set it first: qme config xampp-current <version>"));
+        process.exit(1);
+    }
+
+    if (currentVersion.toLowerCase() === requestedVersion.toLowerCase()) {
+        console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already active`));
+        process.exit(0);
+    }
+
+    if (!fs.existsSync(xamppRoot) || !fs.statSync(xamppRoot).isDirectory()) {
+        console.log(chalk.red(`❌ Active XAMPP folder not found: ${xamppRoot}`));
+        process.exit(1);
+    }
+
+    const baseDir = path.dirname(xamppRoot);
+    const currentVersionDir = path.join(baseDir, `xampp-${currentVersion}`);
+    const requestedVersionDir = path.join(baseDir, `xampp-${requestedVersion}`);
+
+    if (!fs.existsSync(requestedVersionDir) || !fs.statSync(requestedVersionDir).isDirectory()) {
+        console.log(chalk.red(`❌ Requested XAMPP folder not found: ${requestedVersionDir}`));
+        process.exit(1);
+    }
+
+    if (fs.existsSync(currentVersionDir)) {
+        console.log(chalk.red(`❌ Destination already exists: ${currentVersionDir}`));
+        console.log(chalk.yellow("Update xampp-current or rename/remove that folder first."));
+        process.exit(1);
+    }
+
+    try {
+        fs.renameSync(xamppRoot, currentVersionDir);
+        try {
+            fs.renameSync(requestedVersionDir, xamppRoot);
+        } catch (swapError) {
+            fs.renameSync(currentVersionDir, xamppRoot);
+            throw swapError;
+        }
+    } catch (error) {
+        console.log(chalk.red("❌ Failed to switch XAMPP folders"));
+        console.log(chalk.yellow(error.message));
+        process.exit(1);
+    }
+
+    setXamppPath(xamppRoot, { silent: true });
+    setXamppCurrentVersion(requestedVersion, { silent: true });
+
+    console.log(chalk.green(`✅ Switched XAMPP from ${currentVersion} to ${requestedVersion}`));
+    console.log(chalk.green(`✅ Active folder: ${xamppRoot}`));
+    console.log(chalk.green(`✅ Previous active folder renamed as: ${currentVersionDir}`));
+    console.log(chalk.green("✅ Starting XAMPP with switched version..."));
+    runXamppStart();
 }
 
 function runXamppStartByPlatform() {
@@ -440,6 +488,36 @@ async function main() {
         return;
     }
 
+    if (
+        args[0] === "git"
+        && args[1] === "repo"
+        && (
+            (args[2] === "project" && args[3] === "id")
+            || args[2] === "project-id"
+            || args[2] === "project_id"
+        )
+    ) {
+        const rawProjectId = args[2] === "project" ? args[4] : args[3];
+        const projectId = Number(rawProjectId);
+
+        if (!rawProjectId || !Number.isInteger(projectId) || projectId <= 0) {
+            console.log(chalk.red("❌ Valid numeric project ID required"));
+            console.log(chalk.yellow("Usage: qme git repo project id <project-id>"));
+            console.log(chalk.yellow("Alias: qme git repo project-id <project-id>"));
+            process.exit(1);
+        }
+
+        const repoUrl = getProjectRepoUrl();
+        if (!repoUrl) {
+            console.log(chalk.red("❌ Not a git repository"));
+            process.exit(1);
+        }
+
+        setProjectIdForRepo(repoUrl, projectId);
+        console.log(chalk.green("✅ Project ID for this repository is now set to:"), chalk.cyan(String(projectId)));
+        return;
+    }
+
     if (args[0] === "config" && args[1] === "export") {
         const outputPath = args[2] || null;
         exportConfig(outputPath);
@@ -491,89 +569,7 @@ async function main() {
     }
 
     if (args[0] === "xampp" && args[1] === "switch") {
-        if (process.platform !== "win32") {
-            console.log(chalk.red("❌ xampp switch is currently supported on Windows"));
-            process.exit(1);
-        }
-
-        const requestedVersion = normalizeXamppVersion(args[2]);
-        if (!requestedVersion) {
-            console.log(chalk.red("❌ XAMPP version required"));
-            console.log(chalk.yellow("Usage: qme xampp switch <version>"));
-            process.exit(1);
-        }
-
-        const xamppRoot = getXamppPath() || "D:\\xampp";
-        const baseDir = path.dirname(xamppRoot);
-        const versionDir = path.join(baseDir, `xampp-${requestedVersion}`);
-        const currentVersion = normalizeXamppVersion(getXamppCurrentVersion());
-        const currentVersionDir = path.join(baseDir, `xampp-${currentVersion}`);
-
-        if (!fs.existsSync(versionDir) || !fs.statSync(versionDir).isDirectory()) {
-            console.log(chalk.red(`❌ Not found: ${versionDir}`));
-            console.log(chalk.yellow(`Checked base path: ${baseDir}`));
-            console.log(chalk.yellow(`Set/verify root path with: qme config xampp-path "${xamppRoot}"`));
-            process.exit(1);
-        }
-
-        if (!currentVersion) {
-            console.log(chalk.red("❌ Current XAMPP version is not set in config"));
-            console.log(chalk.yellow("Set it first: qme config xampp-current <version>"));
-            process.exit(1);
-        }
-
-        if (currentVersion === requestedVersion) {
-            console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already marked as current`));
-            process.exit(0);
-        }
-
-        if (!fs.existsSync(xamppRoot) || !fs.statSync(xamppRoot).isDirectory()) {
-            console.log(chalk.red(`❌ Active XAMPP folder not found: ${xamppRoot}`));
-            process.exit(1);
-        }
-
-        if (fs.existsSync(currentVersionDir)) {
-            console.log(chalk.red(`❌ Cannot rename current folder because target already exists: ${currentVersionDir}`));
-            process.exit(1);
-        }
-
-        console.log(chalk.cyan("⏹️ Stopping running XAMPP services..."));
-        runWindowsShellSync(`cmd /c if exist "${xamppRoot}\\xampp_stop.exe" ("${xamppRoot}\\xampp_stop.exe") else (exit /b 0)`, {
-            allowFailure: true
-        });
-        runWindowsShellSync("cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe", {
-            allowFailure: true
-        });
-        runWindowsShellSync("cmd /c sc stop Apache2.4 & sc stop mysql", {
-            allowFailure: true
-        });
-        await sleep(1500);
-
-        try {
-            await renameWithRetry(xamppRoot, currentVersionDir);
-            try {
-                await renameWithRetry(versionDir, xamppRoot);
-            } catch (swapError) {
-                await renameWithRetry(currentVersionDir, xamppRoot);
-                throw swapError;
-            }
-        } catch (error) {
-            console.log(chalk.red("❌ Failed to switch XAMPP folders"));
-            console.log(chalk.yellow(error.message));
-            console.log(chalk.yellow("Close any Explorer/terminal window opened inside D:\\xampp and try again."));
-            process.exit(1);
-        }
-
-        setXamppPath(xamppRoot, { silent: true });
-        setXamppCurrentVersion(requestedVersion, { silent: true });
-
-        console.log(chalk.cyan("▶️ Starting switched XAMPP..."));
-        runWindowsShellSync(`cmd /c if exist "${xamppRoot}\\xampp_start.exe" ("${xamppRoot}\\xampp_start.exe") else (exit /b 1)`, {
-            failMessage: "Failed to start switched XAMPP"
-        });
-
-        console.log(chalk.green(`✅ Switched XAMPP from ${currentVersion} to ${requestedVersion}`));
-        console.log(chalk.green(`✅ Active folder: ${xamppRoot}`));
+        runXamppSwitch(args[2]);
         return;
     }
 

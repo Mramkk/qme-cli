@@ -201,6 +201,22 @@ async function waitForAnyHttpUrl(urls, timeoutMs = 60000, pollMs = 1500) {
     return "";
 }
 
+function openUrlInBrowser(url) {
+    return new Promise(resolve => {
+        exec(`cmd /c start "" "${url}"`, { windowsHide: false }, error => {
+            if (error) {
+                console.log(chalk.yellow(`⚠️ Could not open browser automatically: ${url}`));
+                console.log(chalk.yellow(error.message));
+                resolve(false);
+                return;
+            }
+
+            console.log(chalk.green(`✅ Opened in browser: ${url}`));
+            resolve(true);
+        });
+    });
+}
+
 const COMMANDS = {
     taskmgr: {
         commandLine: 'cmd /c start "" taskmgr',
@@ -443,6 +459,7 @@ function runXamppStart() {
         }
 
         console.log(chalk.green(`✅ phpMyAdmin ready: ${readyUrl}`));
+        await openUrlInBrowser(readyUrl);
     };
 
     isWindowsProcessRunning("httpd.exe").then(httpdRunning => {
@@ -475,12 +492,12 @@ function runXamppStop() {
     const commandLine = buildXamppCommand("xampp_stop.exe");
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Failed to stop XAMPP"));
+            console.log(chalk.yellow("⚠️ XAMPP stop command failed or XAMPP is already stopped."));
             console.log(chalk.yellow(error.message));
-            process.exit(1);
+        } else {
+            console.log(chalk.green("✅ Stop XAMPP"));
         }
 
-        console.log(chalk.green("✅ Stop XAMPP"));
         const cleanupCommand = "cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe";
         exec(cleanupCommand, { windowsHide: false }, cleanupError => {
             if (cleanupError) {
