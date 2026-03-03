@@ -492,20 +492,20 @@ function runXamppStop() {
     const commandLine = buildXamppCommand("xampp_stop.exe");
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Failed to stop XAMPP"));
+            console.log(chalk.yellow("⚠️ XAMPP stop command failed or XAMPP is already stopped."));
             console.log(chalk.yellow(error.message));
-            process.exit(1);
+        } else {
+            console.log(chalk.green("✅ Stop XAMPP"));
         }
 
-        console.log(chalk.green("✅ Stop XAMPP"));
-        const cleanupCommand = "cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe";
+        const cleanupCommand = "cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe";
         exec(cleanupCommand, { windowsHide: false }, cleanupError => {
             if (cleanupError) {
                 console.log(chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."));
                 return;
             }
 
-            console.log(chalk.green("✅ Forced cleanup for httpd/mysqld/php/xampp-control"));
+            console.log(chalk.green("✅ Forced cleanup for httpd/mysqld/php/xampp-control/git/node/code"));
         });
     });
 }

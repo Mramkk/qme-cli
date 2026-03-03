@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const CONFIG_PATH = path.join(os.homedir(), ".mycli.json");
+const CONFIG_PATH = path.join(os.homedir(), ".qme-cli.json");
 const DEFAULT_BRANCH = "main";
 
 function loadRawConfig() {
