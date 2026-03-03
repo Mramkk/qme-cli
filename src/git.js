@@ -136,6 +136,34 @@ function buildGitLabMergeRequestUrl(repoUrl, sourceBranch, targetBranch, project
   return `${repoBaseUrl}/merge_requests/new?${params.toString()}`;
 }
 
+function buildGitHubPullRequestUrl(repoUrl, sourceBranch, targetBranch) {
+  const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
+  if (!repoBaseUrl) {
+    return "";
+  }
+
+  const source = String(sourceBranch || "").trim();
+  const target = String(targetBranch || "").trim();
+  if (!source || !target) {
+    return "";
+  }
+
+  let hostname = "";
+  try {
+    hostname = new URL(repoBaseUrl).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+
+  if (!hostname.includes("github.com")) {
+    return "";
+  }
+
+  const base = encodeURIComponent(target);
+  const compare = encodeURIComponent(source);
+  return `${repoBaseUrl}/compare/${base}...${compare}?expand=1`;
+}
+
 function openUrlInBrowser(url) {
   if (process.platform === "win32") {
     execSync(`start "" "${url}"`, { stdio: "ignore", shell: true });
@@ -279,8 +307,8 @@ async function runGitSync() {
       chalk.yellow(`📦 ` + `Local commits : ${chalk.cyan(localCommitCount)}`),
     );
 
-    // If commits exist, show pull as an explicit menu option.
-    if (localCommitCount > 0) {
+    // If no local commits exist, show pull as an explicit menu option.
+    if (localCommitCount === 0) {
       const action = await askFirstMenuAction(false, true);
       await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
       return;
@@ -632,18 +660,6 @@ function getUpstreamRef(currentBranch) {
   return `${REMOTE}/${currentBranch}`;
 }
 
-function hasCommitsToPush(currentBranch) {
-  try {
-    const out = execSync(
-      `git rev-list --count ${REMOTE}/${currentBranch}..HEAD`,
-      { encoding: "utf8" },
-    ).trim();
-    return Number(out) > 0;
-  } catch {
-    return true;
-  }
-}
-
 function formatGitError(error) {
   const stderr = String(error?.stderr || error?.message || "").trim();
   const text = stderr.toLowerCase();
@@ -735,11 +751,6 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
     return;
   }
 
-  if (!hasCommitsToPush(currentBranch)) {
-    console.log(chalk.gray("ℹ️ Nothing to push"));
-    return;
-  }
-
   const action = await askAfterPullAction(currentBranch);
   if (action !== "push") {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Push skipped"));
@@ -758,9 +769,15 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
 }
 
 async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, projectId) {
+  const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
+  if (action !== "open") {
+    console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
+    return;
+  }
+
   const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
-  const normalizedProjectId = normalizeProjectId(projectId);
-  if (!repoBaseUrl || !normalizedProjectId) {
+  if (!repoBaseUrl) {
+    console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
     return;
   }
 
@@ -771,26 +788,34 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
     return;
   }
 
-  if (!hostname.includes("gitlab")) {
+  const normalizedProjectId = normalizeProjectId(projectId);
+  let mergeRequestUrl = "";
+  if (hostname.includes("gitlab")) {
+    mergeRequestUrl = buildGitLabMergeRequestUrl(
+      repoUrl,
+      sourceBranch,
+      targetBranch,
+      normalizedProjectId,
+    );
+  } else if (hostname.includes("github.com")) {
+    mergeRequestUrl = buildGitHubPullRequestUrl(
+      repoUrl,
+      sourceBranch,
+      targetBranch,
+    );
+  } else {
+    console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
+    console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
     return;
   }
-
-  const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
-  if (action !== "open") {
-    console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
-    return;
-  }
-
-  const mergeRequestUrl = buildGitLabMergeRequestUrl(
-    repoUrl,
-    sourceBranch,
-    targetBranch,
-    normalizedProjectId,
-  );
 
   if (!mergeRequestUrl) {
     console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
-    console.log(chalk.yellow("This flow currently supports GitLab remotes with a valid project_id."));
+    if (hostname.includes("gitlab")) {
+      console.log(chalk.yellow("For GitLab, set a valid project_id in repo config."));
+    } else {
+      console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
+    }
     return;
   }
 
