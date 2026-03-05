@@ -307,15 +307,8 @@ async function runGitSync() {
       chalk.yellow(`📦 ` + `Local commits : ${chalk.cyan(localCommitCount)}`),
     );
 
-    // If no local commits exist, show pull as an explicit menu option.
-    if (localCommitCount === 0) {
-      const action = await askFirstMenuAction(false, true);
-      await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
-      return;
-    }
-
-    // Otherwise show first menu
-    const action = await askFirstMenuAction(false);
+    // With a clean working tree, always allow pull from the first menu.
+    const action = await askFirstMenuAction(false, true);
     await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
     return;
   }
