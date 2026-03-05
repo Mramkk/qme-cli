@@ -358,6 +358,8 @@ module.exports = {
     askResetMenuAction,
     askGitLogCommitSelection,
     askResetModeForCommit,
+    askQuestion,
     askSshEmail,
     askSshTag
 };
+

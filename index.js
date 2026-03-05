@@ -7,7 +7,7 @@ const os = require("os");
 const path = require("path");
 const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove } = require("./src/git.js");
 const { generateGitSshKey, getDefaultSshEmail } = require("./src/ssh.js");
-const { askSshEmail, askSshTag } = require("./src/prompts.js");
+const { askQuestion, askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
     exportConfig,
     setRemoteBranchForRepo,
@@ -62,16 +62,21 @@ function runWindowsShellSync(commandLine, options = {}) {
     return true;
 }
 
-function runXamppSwitch(requestedVersionRaw) {
-    if (process.platform !== "win32") {
-        console.log(chalk.red("❌ xampp switch is currently supported on Windows"));
-        process.exit(1);
+function getAvailableXamppVersions(baseDir, activeVersion) {
+    if (!fs.existsSync(baseDir) || !fs.statSync(baseDir).isDirectory()) {
+        return [];
     }
 
-    const requestedVersion = normalizeXamppVersion(requestedVersionRaw);
-    if (!requestedVersion) {
-        console.log(chalk.red("❌ XAMPP version required"));
-        console.log(chalk.yellow("Usage: qme xampp switch <version>"));
+    return fs.readdirSync(baseDir, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && /^xampp-(.+)$/i.test(entry.name))
+        .map(entry => normalizeXamppVersion(entry.name))
+        .filter(version => version && version.toLowerCase() !== String(activeVersion || "").toLowerCase())
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+}
+
+async function runXamppSwitch(requestedVersionRaw) {
+    if (process.platform !== "win32") {
+        console.log(chalk.red("❌ xampp switch is currently supported on Windows"));
         process.exit(1);
     }
 
@@ -83,17 +88,52 @@ function runXamppSwitch(requestedVersionRaw) {
         process.exit(1);
     }
 
-    if (currentVersion.toLowerCase() === requestedVersion.toLowerCase()) {
-        console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already active`));
-        process.exit(0);
-    }
-
     if (!fs.existsSync(xamppRoot) || !fs.statSync(xamppRoot).isDirectory()) {
         console.log(chalk.red(`❌ Active XAMPP folder not found: ${xamppRoot}`));
         process.exit(1);
     }
 
     const baseDir = path.dirname(xamppRoot);
+    let requestedVersion = normalizeXamppVersion(requestedVersionRaw);
+
+    if (!requestedVersion) {
+        const availableVersions = getAvailableXamppVersions(baseDir, currentVersion);
+        if (availableVersions.length === 0) {
+            console.log(chalk.red(`❌ No switch targets found in: ${baseDir}`));
+            console.log(chalk.yellow("Expected folders like: xampp-7.4, xampp-8.1"));
+            process.exit(1);
+        }
+
+        console.log(chalk.blue(`📁 Active path: ${xamppRoot}`));
+        console.log(chalk.blue(`📂 Searching switch targets in: ${baseDir}`));
+        console.log(chalk.green(`🟢 Current active version: ${currentVersion}`));
+        console.log(chalk.blue("🔹 Available XAMPP versions:"));
+        availableVersions.forEach((version, index) => {
+            console.log(chalk.green(`  ${index + 1}) ${version}`));
+        });
+
+        const answer = await askQuestion(
+            chalk.yellow(`👉 Choose version (1-${availableVersions.length}) [press Enter to abort]: `)
+        );
+        if (!answer) {
+            console.log(chalk.yellow("ℹ️ Switch cancelled"));
+            process.exit(0);
+        }
+
+        const selectedIndex = Number.parseInt(answer, 10);
+        if (Number.isNaN(selectedIndex) || selectedIndex < 1 || selectedIndex > availableVersions.length) {
+            console.log(chalk.red("❌ Invalid selection"));
+            process.exit(1);
+        }
+
+        requestedVersion = availableVersions[selectedIndex - 1];
+    }
+
+    if (currentVersion.toLowerCase() === requestedVersion.toLowerCase()) {
+        console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already active`));
+        process.exit(0);
+    }
+
     const currentVersionDir = path.join(baseDir, `xampp-${currentVersion}`);
     const requestedVersionDir = path.join(baseDir, `xampp-${requestedVersion}`);
 
@@ -569,7 +609,7 @@ async function main() {
     }
 
     if (args[0] === "xampp" && args[1] === "switch") {
-        runXamppSwitch(args[2]);
+        await runXamppSwitch(args[2]);
         return;
     }
 
@@ -679,6 +719,11 @@ async function main() {
         return;
     }
 
+    if (args[0] === "xswitch") {
+        await runXamppSwitch(args[1]);
+        return;
+    }
+
     if (args[0] === "xampp" && args[1] === "start") {
         runXamppStartByPlatform();
         return;
@@ -717,8 +762,9 @@ async function main() {
     // console.log(chalk.green("  qme w <command...>    # Alias for win"));
     // console.log(chalk.green("  qme win <command...>  # Run any Windows cmd command"));
     // console.log(chalk.green("  qme xampp start|stop  # Start/stop XAMPP on Windows/macOS (start waits for phpMyAdmin readiness)"));
-    // console.log(chalk.green("  qme xstart|xstop      # Shortcut for xampp start/stop"));
+    // console.log(chalk.green("  qme xstart|xstop|xswitch <version>  # Shortcut for xampp start/stop/switch"));
 }
 
 main();
 // testing 
+
