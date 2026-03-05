@@ -258,3 +258,10 @@ Shortcut for `qme xampp stop`.
 qme xstop
 ```
 
+39. `qme xswitch [version]`
+Shortcut for `qme xampp switch [version]`.
+```bash
+qme xswitch 8.2
+qme xswitch
+```
+
