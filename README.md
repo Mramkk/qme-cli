@@ -92,11 +92,15 @@ Sets, shows, or clears configured XAMPP location.
 qme config xampp-path "D:\xampp"
 ```
 
-13. `qme config xampp-current [version|--show|-s|--clear]`
-Sets, shows, or clears active XAMPP version label in config.
+13. `qme config xampp-v [version|--show|-s|--clear]`
+Sets, shows, or clears the active XAMPP version label in qme config.
 ```bash
-qme config xampp-current 8.1
+qme config xampp-v 8.1
+qme config xampp-v --show
+qme config xampp-v -s
+qme config xampp-v --clear
 ```
+Note: this value is a qme config label (used by qme commands like `qme xampp switch`), not an auto-detected XAMPP binary version.
 
 14. `qme npm <args...>`
 Pass-through for npm commands.
@@ -237,7 +241,7 @@ qme xampp stop
 ```
 
 36. `qme xampp switch <version>`
-Switches active XAMPP folder version on Windows by swapping `D:\xampp` (or configured `xampp-path`) with `xampp-<version>`, updates `xampp-current`, and starts XAMPP.
+Switches active XAMPP folder version on Windows by swapping `D:\xampp` (or configured `xampp-path`) with `xampp-<version>`, updates `xampp-v`, and starts XAMPP.
 ```bash
 qme xampp switch 8.2
 ```
