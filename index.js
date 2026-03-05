@@ -79,7 +79,7 @@ function runXamppSwitch(requestedVersionRaw) {
     const currentVersion = normalizeXamppVersion(getXamppCurrentVersion());
     if (!currentVersion) {
         console.log(chalk.red("❌ XAMPP current version is not set"));
-        console.log(chalk.yellow("Set it first: qme config xampp-current <version>"));
+        console.log(chalk.yellow("Set it first: qme config xampp-v <version>"));
         process.exit(1);
     }
 
@@ -104,7 +104,7 @@ function runXamppSwitch(requestedVersionRaw) {
 
     if (fs.existsSync(currentVersionDir)) {
         console.log(chalk.red(`❌ Destination already exists: ${currentVersionDir}`));
-        console.log(chalk.yellow("Update xampp-current or rename/remove that folder first."));
+        console.log(chalk.yellow("Update xampp-v or rename/remove that folder first."));
         process.exit(1);
     }
 
@@ -546,7 +546,7 @@ async function main() {
         return;
     }
 
-    if (args[0] === "config" && args[1] === "xampp-current") {
+    if (args[0] === "config" && args[1] === "xampp-v") {
         const option = args[2];
 
         if (!option || option === "--show" || option === "-s") {
@@ -697,7 +697,7 @@ async function main() {
     // console.log(chalk.green("  qme config branch <branch-name>  # Set remote branch for pull"));
     // console.log(chalk.green("  qme config export [output-path]  # Export ~/.mycli.json backup"));
     // console.log(chalk.green("  qme config xampp-path [path|--show|--clear]"));
-    // console.log(chalk.green("  qme config xampp-current [version|--show|--clear]"));
+    // console.log(chalk.green("  qme config xampp-v [version|--show|--clear]"));
     // console.log(chalk.green("  qme wintask  # Open Task Manager"));
     // console.log(chalk.green("  qme taskm    # Open Task Manager (shortcut)"));
     // console.log(chalk.green("  qme wl       # Lock current Windows session"));
