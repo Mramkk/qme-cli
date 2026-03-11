@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const chalk = require("chalk");
 const { getCurrentBranch, getProjectRepoUrl } = require("./utils.js");
 const { setRemoteBranchForRepo } = require("./config.js");
@@ -26,7 +26,37 @@ if [ $status -ne 0 ]; then
 fi
 exit 0
 `;
+function runGit(args, options = {}) {
+    const { quiet = false } = options;
 
+    const result = spawnSync("git", args, {
+        encoding: "utf8",
+        shell: false
+    });
+
+    if (!quiet) {
+        if (result.stdout) {
+            process.stdout.write(result.stdout);
+        }
+        if (result.stderr) {
+            process.stderr.write(result.stderr);
+        }
+    }
+
+    if (result.error) {
+        throw result.error;
+    }
+
+    if (typeof result.status === "number" && result.status !== 0) {
+        const error = new Error(`Command failed: git ${args.join(" ")}`);
+        error.stderr = result.stderr || "";
+        error.stdout = result.stdout || "";
+        error.status = result.status;
+        throw error;
+    }
+
+    return result;
+}
 function ensureGitRepository() {
     try {
         execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -58,16 +88,28 @@ function escapeDoubleQuotes(value) {
     return String(value || "").replace(/"/g, '\\"');
 }
 
+function getGitStderr(error) {
+    return String(error?.stderr || error?.message || "").trim();
+}
+
+function isNonFastForwardPushError(error) {
+    const text = getGitStderr(error).toLowerCase();
+
+    return (
+        text.includes("non-fast-forward") ||
+        text.includes("(fetch first)") ||
+        text.includes("fetch first") ||
+        text.includes("remote contains work") ||
+        text.includes("updates were rejected because the remote contains work")
+    );
+}
+
 function formatGitError(error) {
-    const stderr = String(error?.stderr || error?.message || "").trim();
+    const stderr = getGitStderr(error);
     const text = stderr.toLowerCase();
 
-    if (
-        text.includes("non-fast-forward") ||
-        text.includes("fetch first") ||
-        text.includes("rejected")
-    ) {
-        return "remote rejected (non-fast-forward). Pull/rebase remote changes first, then push again.";
+    if (isNonFastForwardPushError(error)) {
+        return "remote rejected (non-fast-forward). Remote has commits you don’t have locally.";
     }
 
     if (
@@ -88,6 +130,68 @@ function formatGitError(error) {
 
     const line = stderr.split(/\r?\n/).find(Boolean);
     return line || "unknown git error";
+}
+
+function hasRemoteTrackingBranch(branch) {
+    try {
+        execSync(`git show-ref --verify --quiet refs/remotes/origin/${branch}`, { stdio: "ignore" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function tryFetchOriginBranch(branch) {
+    try {
+        execSync(`git fetch --quiet origin ${branch}`, { stdio: "ignore" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function tryIsAncestor(olderCommit, newerCommit) {
+    try {
+        execSync(`git merge-base --is-ancestor ${olderCommit} ${newerCommit}`, { stdio: "ignore" });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function analyzeRemoteHistory(branch) {
+    const fetched = tryFetchOriginBranch(branch);
+    if (!fetched || !hasRemoteTrackingBranch(branch)) {
+        return { kind: "unknown" };
+    }
+
+    const localHead = execSync("git rev-parse HEAD", { encoding: "utf8" }).trim();
+    const remoteHead = execSync(`git rev-parse refs/remotes/origin/${branch}`, { encoding: "utf8" }).trim();
+
+    if (localHead === remoteHead) {
+        return { kind: "up_to_date" };
+    }
+
+    if (tryIsAncestor(localHead, remoteHead)) {
+        return { kind: "remote_ahead" };
+    }
+
+    if (tryIsAncestor(remoteHead, localHead)) {
+        return { kind: "local_ahead" };
+    }
+
+    try {
+        const base = execSync(`git merge-base ${localHead} ${remoteHead}`, {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "ignore"]
+        }).trim();
+        if (!base) {
+            return { kind: "unrelated" };
+        }
+        return { kind: "diverged" };
+    } catch {
+        return { kind: "unrelated" };
+    }
 }
 
 function askQuestion(question) {
@@ -255,12 +359,58 @@ async function configureOriginAndPush(branchInput) {
     }
 
     try {
-        execSync(`git push -u origin ${branch}`, { stdio: "inherit" });
+        runGit(["push", "-u", "origin", branch]);
         console.log(chalk.green(`✅ Pushed to origin/${branch}`));
     } catch (error) {
         console.log(chalk.red(`❌ Push failed: ${formatGitError(error)}`));
-        console.log(chalk.yellow(`ℹ️ You can run: git pull --rebase origin ${branch}`));
-        console.log(chalk.yellow(`ℹ️ Then run: git push -u origin ${branch}`));
+
+        if (!isNonFastForwardPushError(error)) {
+            return;
+        }
+
+        const analysis = analyzeRemoteHistory(branch);
+
+        if (analysis.kind === "unrelated") {
+            console.log(chalk.yellow("ℹ️ origin has commits with no shared history (common when the remote was created with a README/license)."));
+            const shouldMergePull = await askYesNo(
+                chalk.yellow(`🔁 Pull and merge with --allow-unrelated-histories, then push to origin/${branch}?`),
+                true
+            );
+            if (!shouldMergePull) {
+                console.log(chalk.yellow(`ℹ️ You can run: git pull origin ${branch} --allow-unrelated-histories`));
+                console.log(chalk.yellow(`ℹ️ Or overwrite remote (destructive): git push --force-with-lease -u origin ${branch}`));
+                return;
+            }
+
+            try {
+                runGit(["pull", "origin", branch, "--allow-unrelated-histories"]);
+                runGit(["push", "-u", "origin", branch]);
+                console.log(chalk.green(`✅ Pushed to origin/${branch}`));
+            } catch (recoveryError) {
+                console.log(chalk.red(`❌ Recovery failed: ${formatGitError(recoveryError)}`));
+                console.log(chalk.yellow("ℹ️ Resolve any merge conflicts, then run: git push -u origin " + branch));
+            }
+            return;
+        }
+
+        const shouldRebasePull = await askYesNo(
+            chalk.yellow(`🔁 Pull --rebase from origin/${branch}, then push?`),
+            true
+        );
+        if (!shouldRebasePull) {
+            console.log(chalk.yellow(`ℹ️ You can run: git pull --rebase origin ${branch}`));
+            console.log(chalk.yellow(`ℹ️ Then run: git push -u origin ${branch}`));
+            return;
+        }
+
+        try {
+            runGit(["pull", "--rebase", "origin", branch]);
+            runGit(["push", "-u", "origin", branch]);
+            console.log(chalk.green(`✅ Pushed to origin/${branch}`));
+        } catch (recoveryError) {
+            console.log(chalk.red(`❌ Recovery failed: ${formatGitError(recoveryError)}`));
+            console.log(chalk.yellow("ℹ️ Fix the issue, then run: git push -u origin " + branch));
+        }
     }
 }
 
@@ -297,3 +447,5 @@ async function initializeRepo(options = {}) {
 module.exports = {
     initializeRepo
 };
+
+

@@ -151,6 +151,12 @@ function askAfterPullAction(currentBranch) {
 }
 
 function askAfterPushMergeRequestAction(currentBranch, targetBranch) {
+    const source = String(currentBranch || "").trim();
+    const target = String(targetBranch || "").trim();
+
+    if (!source || !target || source === target) {
+        return Promise.resolve("skip");
+    }
     return new Promise(resolve => {
         const rl = createRL();
 
@@ -362,4 +368,5 @@ module.exports = {
     askSshEmail,
     askSshTag
 };
+
 
