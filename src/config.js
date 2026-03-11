@@ -211,8 +211,58 @@ function getXamppCurrentVersion() {
     return value;
 }
 
+
+function normalizeGitUserEntry(entry) {
+    const name = String(entry?.name || "").trim();
+    const email = String(entry?.email || "").trim();
+
+    if (!name || !email) {
+        return null;
+    }
+
+    return { name, email };
+}
+
+function getGitUsers() {
+    const config = loadRawConfig();
+    const list = config.system && Array.isArray(config.system.gitUsers)
+        ? config.system.gitUsers
+        : [];
+
+    return list
+        .map(normalizeGitUserEntry)
+        .filter(Boolean);
+}
+
+function addOrUpdateGitUser(user) {
+    const normalized = normalizeGitUserEntry(user);
+    if (!normalized) {
+        return false;
+    }
+
+    const config = loadRawConfig();
+    if (!config.system) {
+        config.system = {};
+    }
+
+    const users = Array.isArray(config.system.gitUsers) ? config.system.gitUsers : [];
+    const emailKey = normalized.email.toLowerCase();
+
+    const index = users.findIndex(item => String(item?.email || "").trim().toLowerCase() === emailKey);
+    if (index >= 0) {
+        users[index] = normalized;
+    } else {
+        users.push(normalized);
+    }
+
+    config.system.gitUsers = users;
+    saveRawConfig(config);
+    return true;
+}
 module.exports = {
     getConfigPath,
+    getGitUsers,
+    addOrUpdateGitUser,
     loadOrCreateRepoConfig,
     setRemoteBranchForRepo,
     setProjectIdForRepo,
