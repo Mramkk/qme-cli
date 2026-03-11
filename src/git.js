@@ -38,6 +38,86 @@ function askQuestion(questionText) {
   });
 }
 
+async function askYesNo(question, defaultValue = true) {
+  const hint = defaultValue ? "Y/n" : "y/N";
+  const answer = (await askQuestion(`${question} (${hint}): `)).toLowerCase();
+
+  if (!answer) {
+    return defaultValue;
+  }
+
+  return answer === "y" || answer === "yes";
+}
+
+function getGlobalGitConfigValue(key) {
+  try {
+    return execSync(`git config --global --get ${key}`, { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+}
+
+function setGlobalGitConfigValue(key, value) {
+  const safeValue = String(value ?? "").replace(/"/g, '\\"');
+  execSync(`git config --global ${key} "${safeValue}"`, { stdio: "ignore" });
+}
+
+function parseCredentialTarget(inputRaw) {
+  const input = String(inputRaw || "").trim();
+  if (!input) {
+    return null;
+  }
+
+  // URL form
+  if (input.includes("://")) {
+    try {
+      const url = new URL(input);
+      const protocol = (url.protocol || "https:").replace(":", "");
+      const host = url.hostname;
+      if (!host) {
+        return null;
+      }
+      return { protocol: protocol || "https", host };
+    } catch {
+      return null;
+    }
+  }
+
+  // SCP-like SSH: git@host:owner/repo.git
+  const scpMatch = input.match(/^git@([^:]+):(.+)$/);
+  if (scpMatch) {
+    return { protocol: "https", host: scpMatch[1] };
+  }
+
+  // ssh://git@host/owner/repo.git
+  const sshMatch = input.match(/^ssh:\/\/git@([^/]+)\/(.+)$/);
+  if (sshMatch) {
+    return { protocol: "https", host: sshMatch[1] };
+  }
+
+  // Hostname only
+  if (/^[a-z0-9.-]+$/i.test(input)) {
+    return { protocol: "https", host: input };
+  }
+
+  return null;
+}
+
+function rejectGitCredential(target) {
+  const protocol = String(target?.protocol || "https").trim() || "https";
+  const host = String(target?.host || "").trim();
+  if (!host) {
+    throw new Error("Missing host for credential reject");
+  }
+
+  // Ask git to remove stored creds for this host via the configured credential helper.
+  // https://git-scm.com/docs/git-credential
+  const input = `protocol=${protocol}\nhost=${host}\n\n`;
+  execSync("git credential reject", {
+    input,
+    stdio: ["pipe", "ignore", "ignore"],
+  });
+}
 function normalizeRepoToHttpUrl(repoUrl) {
   const input = String(repoUrl || "").trim();
   if (!input) {
@@ -837,10 +917,114 @@ function showLastCommits() {
 
 // stash 1
 
+async function runGitUserSwitch() {
+  const currentGlobal = getGitUser("--global") || { name: "", email: "" };
+
+  if (currentGlobal.name || currentGlobal.email) {
+    console.log(
+      chalk.blueBright("👤 Current global user:"),
+      chalk.green(`${currentGlobal.name || "(not set)"} <${currentGlobal.email || "(not set)"}>`),
+    );
+  } else {
+    console.log(chalk.yellow("ℹ️ No global git user is set yet."));
+  }
+
+  const namePrompt = chalk.yellow(
+    `👤 Enter name (git user.name)${currentGlobal.name ? ` [${currentGlobal.name}]` : ""}: `,
+  );
+  const emailPrompt = chalk.yellow(
+    `📧 Enter email (git user.email)${currentGlobal.email ? ` [${currentGlobal.email}]` : ""}: `,
+  );
+
+  const nameInput = await askQuestion(namePrompt);
+  const emailInput = await askQuestion(emailPrompt);
+
+  const name = nameInput || currentGlobal.name;
+  const email = emailInput || currentGlobal.email;
+
+  if (!name || !email) {
+    console.log(chalk.red("❌ Both name and email are required to set global git user"));
+    process.exit(1);
+  }
+
+  const safeName = String(name).replace(/"/g, '\\"');
+  const safeEmail = String(email).replace(/"/g, '\\"');
+
+  try {
+    execSync(`git config --global user.name "${safeName}"`, { stdio: "ignore" });
+    execSync(`git config --global user.email "${safeEmail}"`, { stdio: "ignore" });
+  } catch (error) {
+    console.log(chalk.red("❌ Failed to set global git user"));
+    console.log(chalk.yellow(error.message));
+    process.exit(1);
+  }
+
+  console.log(chalk.green("✅ Updated global git user"));
+  console.log(chalk.blueBright("👤 Now:"), chalk.green(`${name} <${email}>`));
+
+  // Credential manager handling (helps when switching accounts)
+  try {
+    const helper = getGlobalGitConfigValue("credential.helper");
+    if (process.platform === "win32" && !helper) {
+      const shouldSet = await askYesNo(
+        chalk.yellow("🔐 credential.helper is not set. Set it to manager-core?"),
+        true,
+      );
+      if (shouldSet) {
+        setGlobalGitConfigValue("credential.helper", "manager-core");
+        console.log(chalk.green("✅ Set credential.helper = manager-core"));
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  const shouldClear = await askYesNo(
+    chalk.yellow("🔐 Clear saved credentials for a host (so Git prompts login again)?"),
+    true,
+  );
+  if (!shouldClear) {
+    return;
+  }
+
+  let defaultHost = "";
+  try {
+    const originUrl = getProjectRepoUrl();
+    const httpUrl = normalizeRepoToHttpUrl(originUrl);
+    if (httpUrl) {
+      defaultHost = new URL(httpUrl).hostname;
+    }
+  } catch {
+    // ignore
+  }
+
+  const targetRaw = await askQuestion(
+    chalk.yellow(
+      `🌐 Enter remote URL or host to clear${defaultHost ? ` [${defaultHost}]` : ""}: `,
+    ),
+  );
+  const target = parseCredentialTarget(targetRaw || defaultHost);
+  if (!target) {
+    console.log(chalk.yellow("⚠️ Could not parse host. Skipped clearing credentials."));
+    return;
+  }
+
+  try {
+    rejectGitCredential(target);
+    console.log(chalk.green(`✅ Cleared saved credentials for ${target.host}`));
+    console.log(chalk.gray("ℹ️ Next git push/pull will ask you to sign in again."));
+  } catch (error) {
+    console.log(chalk.red("❌ Failed to clear saved credentials"));
+    console.log(chalk.yellow(error.message));
+  }
+}
 module.exports = {
   runGitSync,
   runGitReset,
   runGitLogReset,
   runGitOpen,
-  runGitRemove,
+  runGitRemove,
+  runGitUserSwitch,
 };
+
+

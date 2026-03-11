@@ -1,0 +1,3 @@
+1. “Custom shortcuts”/plugins: qme alias add <name> -- <command...> so users can extend qme without forking.
+    https://chatgpt.com/c/69afb759-c710-83a4-ae8e-02ec255c8c2c
+
