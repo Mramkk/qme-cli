@@ -33,10 +33,16 @@ qme git init --branch main
 ```
 
 3. `qme git sync`
-Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`) when `project_id` is configured.
+Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`) when `project_id` is configured. (Skipped when both branches are the same.)
 ```bash
 qme git sync
 ```
+### Git users (multiple accounts)
+
+- `qme add git user` (alias: `qme git user add`): prompts for name/email and saves it to the qme config user list.
+- `qme git user switch`: choose a saved user (or enter manually) and update global `git config --global user.name/user.email`. It can also clear saved credentials for a host so the next push/pull prompts login again.
+
+Config file: `~/.qme-cli.json` (or legacy `~/.mycli.json`).
 
 4. `qme git reset`
 Opens reset menu (`soft`, `mixed`, `hard`) for recent changes.
@@ -264,4 +270,5 @@ Shortcut for `qme xampp switch [version]`.
 qme xswitch 8.2
 qme xswitch
 ```
+
 
