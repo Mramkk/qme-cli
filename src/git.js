@@ -20,7 +20,7 @@ const {
   getProjectRepoUrl,
   getCurrentBranch,
 } = require("./utils.js");
-const { loadOrCreateRepoConfig } = require("./config.js");
+const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, getConfigPath } = require("./config.js");
 
 const REMOTE = "origin";
 
@@ -917,7 +917,67 @@ function showLastCommits() {
 
 // stash 1
 
+async function runGitUserAdd() {
+  const name = await askQuestion(chalk.yellow("👤 Enter name (git user.name): "));
+  const email = await askQuestion(chalk.yellow("📧 Enter email (git user.email): "));
+
+  if (!name || !email) {
+    console.log(chalk.red("❌ Name and email are required"));
+    process.exit(1);
+  }
+
+  const existing = getGitUsers();
+  const emailKey = String(email).trim().toLowerCase();
+  const already = existing.find(u => String(u.email).trim().toLowerCase() === emailKey);
+
+  if (already) {
+    const shouldUpdate = await askYesNo(
+      chalk.yellow(`⚠️ A saved user already exists for ${already.email}. Update it?`),
+      true,
+    );
+    if (!shouldUpdate) {
+      console.log(chalk.yellow("⚠️ Skipped updating saved git user"));
+      return;
+    }
+  }
+
+  const ok = addOrUpdateGitUser({ name, email });
+  if (!ok) {
+    console.log(chalk.red("❌ Failed to save git user"));
+    process.exit(1);
+  }
+
+  console.log(chalk.green("✅ Saved git user"));
+  console.log(chalk.blueBright("👤"), chalk.green(`${name} <${email}>`));
+  console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
+}
+
 async function runGitUserSwitch() {
+  const savedUsers = getGitUsers();
+  let selectedUser = null;
+
+  if (savedUsers.length > 0) {
+    console.log();
+    console.log(chalk.blueBright("👥 Saved git users:"));
+    console.log(chalk.green("  0) Enter manually"));
+    savedUsers.forEach((user, index) => {
+      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+    });
+
+    const answer = await askQuestion(
+      chalk.yellow(`👉 Choose user (0-${savedUsers.length}) [default: 0]: `),
+    );
+    const selectedIndex = answer ? Number.parseInt(answer, 10) : 0;
+    if (
+      Number.isInteger(selectedIndex) &&
+      selectedIndex >= 1 &&
+      selectedIndex <= savedUsers.length
+    ) {
+      selectedUser = savedUsers[selectedIndex - 1];
+      console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
+    }
+  }
+
   const currentGlobal = getGitUser("--global") || { name: "", email: "" };
 
   if (currentGlobal.name || currentGlobal.email) {
@@ -936,11 +996,11 @@ async function runGitUserSwitch() {
     `📧 Enter email (git user.email)${currentGlobal.email ? ` [${currentGlobal.email}]` : ""}: `,
   );
 
-  const nameInput = await askQuestion(namePrompt);
-  const emailInput = await askQuestion(emailPrompt);
+  const nameInput = selectedUser ? "" : await askQuestion(namePrompt);
+  const emailInput = selectedUser ? "" : await askQuestion(emailPrompt);
 
-  const name = nameInput || currentGlobal.name;
-  const email = emailInput || currentGlobal.email;
+  const name = selectedUser ? selectedUser.name : (nameInput || currentGlobal.name);
+  const email = selectedUser ? selectedUser.email : (emailInput || currentGlobal.email);
 
   if (!name || !email) {
     console.log(chalk.red("❌ Both name and email are required to set global git user"));
@@ -1023,8 +1083,7 @@ module.exports = {
   runGitReset,
   runGitLogReset,
   runGitOpen,
-  runGitRemove,
+  runGitRemove,
   runGitUserSwitch,
+  runGitUserAdd,
 };
-
-

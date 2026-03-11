@@ -5,7 +5,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove, runGitUserSwitch } = require("./src/git.js");
+const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove, runGitUserSwitch, runGitUserAdd } = require("./src/git.js");
 const { generateGitSshKey, getDefaultSshEmail } = require("./src/ssh.js");
 const { askQuestion, askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
@@ -484,6 +484,16 @@ async function main() {
         return;
     }
 
+    if (args[0] === "git" && args[1] === "user" && args[2] === "add") {
+        await runGitUserAdd();
+        return;
+    }
+
+    if (args[0] === "add" && args[1] === "git" && args[2] === "user") {
+        await runGitUserAdd();
+        return;
+    }
+
     if (args[0] === "pa") {
         runArtisan(args.slice(1));
         return;
@@ -774,6 +784,7 @@ async function main() {
 
 main();
 // testing 
+
 
 
 
