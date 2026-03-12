@@ -26,6 +26,68 @@ const { runWindowsCommand, runNotepad, runGoogleChat, runHubstaff, runMail, runX
 const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 
 const args = process.argv.slice(2);
+function getCliVersion() {
+    try {
+        // eslint-disable-next-line import/no-dynamic-require, global-require
+        const pkg = require("./package.json");
+        return pkg && pkg.version ? String(pkg.version) : "";
+    } catch {
+        return "";
+    }
+}
+
+function printHelp(options = {}) {
+    const { isError = false, message = "" } = options;
+
+    if (message) {
+        console.log(isError ? chalk.red(message) : chalk.yellow(message));
+        console.log();
+    }
+
+    const version = getCliVersion();
+    const header = version ? `qme v${version}` : "qme";
+
+    console.log(chalk.blueBright(header));
+    console.log(chalk.gray("Developer command-line toolkit"));
+    console.log();
+
+    console.log(chalk.blueBright("Usage:"));
+    console.log(chalk.green("  qme <command> [subcommand] [options]"));
+    console.log();
+
+    console.log(chalk.blueBright("Common commands:"));
+    console.log(chalk.green("  qme init [--branch <name>]"));
+    console.log(chalk.green("  qme recent"));
+    console.log(chalk.green("  qme git sync|reset|log|open|remove"));
+    console.log(chalk.green("  qme git users [switch|add|remove]"));
+    console.log(chalk.green("  qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]"));
+    console.log(chalk.green("  qme config export [output-path]"));
+    console.log(chalk.green("  qme config branch <branch-name>"));
+    console.log(chalk.green("  qme xampp start|stop|switch <version>"));
+    console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
+    console.log();
+
+    console.log(chalk.blueBright("Git users:"));
+    console.log(chalk.green("  qme git users"));
+    console.log(chalk.green("  qme git users add"));
+    console.log(chalk.green("  qme git users remove"));
+    console.log(chalk.gray("  Aliases: qme git user switch|add|remove, qme add git user"));
+    console.log();
+
+    console.log(chalk.blueBright("Help:"));
+    console.log(chalk.green("  qme help"));
+    console.log(chalk.green("  qme --help   qme -h"));
+    console.log(chalk.green("  qme --version   qme -v"));
+
+    try {
+        // eslint-disable-next-line import/no-dynamic-require, global-require
+        const { getConfigPath } = require("./src/config.js");
+        console.log();
+        console.log(chalk.gray(`Config: ${getConfigPath()}`));
+    } catch {
+        // ignore
+    }
+}
 
 function normalizeXamppVersion(version) {
     return String(version || "")
@@ -454,6 +516,21 @@ function tryOpenInVsCode(targetPath) {
 }
 
 async function main() {
+    if (
+        args.length === 0 ||
+        args[0] === "help" ||
+        args.includes("--help") ||
+        args.includes("-h")
+    ) {
+        printHelp();
+        return;
+    }
+
+    if (args[0] === "--version" || args[0] === "-v") {
+        const version = getCliVersion();
+        console.log(version || "");
+        return;
+    }
     if (args[0] === "npm" || args[0] === "npx" || args[0] === "n") {
         const tool = args[0] === "n" ? "npm" : args[0];
         runNodeToolCommand(tool, args.slice(1));
@@ -803,7 +880,10 @@ async function main() {
     // console.log(chalk.green("  qme win <command...>  # Run any Windows cmd command"));
     // console.log(chalk.green("  qme xampp start|stop  # Start/stop XAMPP on Windows/macOS (start waits for phpMyAdmin readiness)"));
     // console.log(chalk.green("  qme xstart|xstop|xswitch <version>  # Shortcut for xampp start/stop/switch"));
-}
+
+    console.log(chalk.red("❌ Unknown command"));
+    printHelp({ isError: true, message: "Use `qme help` to see available commands." });
+    process.exit(1);}
 
 main();
 // testing 

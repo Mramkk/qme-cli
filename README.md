@@ -18,7 +18,13 @@ Package: `@ramkumarbedia/xqme`
 npm i -g @ramkumarbedia/xqme
 ```
 
-## Commands (One by One with Example)
+## Help
+
+`ash
+qme help
+qme --help
+qme --version
+`\r\n\r\n## Commands (One by One with Example)
 
 1. `qme init [--branch <branch-name>]`
 Initializes qme defaults in the current repository (gitignore, hooks, branch config).
