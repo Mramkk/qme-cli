@@ -259,10 +259,33 @@ function addOrUpdateGitUser(user) {
     saveRawConfig(config);
     return true;
 }
+function removeGitUser(email) {
+    const emailKey = String(email || "").trim().toLowerCase();
+    if (!emailKey) {
+        return false;
+    }
+
+    const config = loadRawConfig();
+    if (!config.system) {
+        config.system = {};
+    }
+
+    const users = Array.isArray(config.system.gitUsers) ? config.system.gitUsers : [];
+    const nextUsers = users.filter(item => String(item?.email || "").trim().toLowerCase() !== emailKey);
+
+    if (nextUsers.length === users.length) {
+        return false;
+    }
+
+    config.system.gitUsers = nextUsers;
+    saveRawConfig(config);
+    return true;
+}
 module.exports = {
     getConfigPath,
     getGitUsers,
     addOrUpdateGitUser,
+    removeGitUser,
     loadOrCreateRepoConfig,
     setRemoteBranchForRepo,
     setProjectIdForRepo,

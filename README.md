@@ -41,6 +41,7 @@ qme git sync
 
 - `qme git users add` (aliases: `qme add git user`, `qme git user add`): prompts for name/email and saves it to the qme config user list.
 - `qme git users` (aliases: `qme git user switch`, `qme git users switch`): choose a saved user (or enter manually) and update global `git config --global user.name/user.email`. It can also clear saved credentials for a host so the next push/pull prompts login again.
+- `qme git users remove` (alias: `qme git user remove`): remove a saved user from the qme config user list.
 
 Config file: `~/.qme-cli.json` (or legacy `~/.mycli.json`).
 
