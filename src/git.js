@@ -844,7 +844,7 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
 async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, projectId) {
   const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
   if (action !== "open") {
-    console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
+    // console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
     return;
   }
 
