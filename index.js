@@ -478,7 +478,20 @@ async function main() {
         runGitOpen();
         return;
     }
+    // Git users (multiple accounts)
+    // New command: `qme git users` (defaults to switch), keeping legacy `qme git user switch` working.
+    if (args[0] === "git" && args[1] === "users") {
+        if (args[2] === "add") {
+            await runGitUserAdd();
+            return;
+        }
 
+        // Default action: switch
+        if (!args[2] || args[2] === "switch") {
+            await runGitUserSwitch();
+            return;
+        }
+    }
     if (args[0] === "git" && args[1] === "user" && args[2] === "switch") {
         await runGitUserSwitch();
         return;
