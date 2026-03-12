@@ -20,7 +20,7 @@ const {
   getProjectRepoUrl,
   getCurrentBranch,
 } = require("./utils.js");
-const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, getConfigPath } = require("./config.js");
+const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath } = require("./config.js");
 
 const REMOTE = "origin";
 
@@ -951,31 +951,99 @@ async function runGitUserAdd() {
   console.log(chalk.blueBright("👤"), chalk.green(`${name} <${email}>`));
   console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
 }
+async function runGitUserRemove() {
+  const savedUsers = getGitUsers();
+
+  if (savedUsers.length === 0) {
+    console.log(chalk.yellow("ℹ️ No saved git users found."));
+    console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
+    return;
+  }
+
+  console.log();
+  console.log(chalk.blueBright("👥 Saved git users:"));
+  console.log(chalk.green("  0) Cancel"));
+  savedUsers.forEach((user, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+  });
+
+  const answer = await askQuestion(
+    chalk.yellow(`🗑️ Choose user to remove (0-${savedUsers.length}) [default: 0]: `),
+  );
+  const selectedIndex = answer ? Number.parseInt(answer, 10) : 0;
+
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex > savedUsers.length) {
+    console.log(chalk.yellow("⚠️ Invalid selection. Nothing removed."));
+    return;
+  }
+
+  if (selectedIndex === 0) {
+    console.log(chalk.yellow("ℹ️ Cancelled."));
+    return;
+  }
+
+  const selectedUser = savedUsers[selectedIndex - 1];
+  const confirmed = await askYesNo(
+    chalk.yellow(`🗑️ Remove ${selectedUser.name} <${selectedUser.email}> from saved users?`),
+    false,
+  );
+
+  if (!confirmed) {
+    console.log(chalk.yellow("⚠️ Skipped removing saved git user"));
+    return;
+  }
+
+  const ok = removeGitUser(selectedUser.email);
+  if (!ok) {
+    console.log(chalk.red("❌ Failed to remove saved git user"));
+    process.exit(1);
+  }
+
+  console.log(chalk.green("✅ Removed saved git user"));
+  console.log(chalk.blueBright("👤"), chalk.green(`${selectedUser.name} <${selectedUser.email}>`));
+  console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
+}
 
 async function runGitUserSwitch() {
-  const savedUsers = getGitUsers();
+  let savedUsers = getGitUsers();
   let selectedUser = null;
 
-  if (savedUsers.length > 0) {
+  while (savedUsers.length > 0) {
     console.log();
     console.log(chalk.blueBright("👥 Saved git users:"));
     console.log(chalk.green("  0) Enter manually"));
+    console.log(chalk.yellow("  r) Remove a saved user"));
     savedUsers.forEach((user, index) => {
       console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
     });
 
-    const answer = await askQuestion(
-      chalk.yellow(`👉 Choose user (0-${savedUsers.length}) [default: 0]: `),
+    const answerRaw = await askQuestion(
+      chalk.yellow(`👉 Choose user (0-${savedUsers.length}) (r = remove, Enter = cancel): `),
     );
-    const selectedIndex = answer ? Number.parseInt(answer, 10) : 0;
-    if (
-      Number.isInteger(selectedIndex) &&
-      selectedIndex >= 1 &&
-      selectedIndex <= savedUsers.length
-    ) {
+    const answer = String(answerRaw || "").trim().toLowerCase();
+
+    if (!answer) {
+      console.log(chalk.yellow("ℹ️ Cancelled."));
+      return;
+    }
+    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
+      await runGitUserRemove();
+      savedUsers = getGitUsers();
+      continue;
+    }
+
+    const selectedIndex = Number.parseInt(answer, 10);
+    if (Number.isInteger(selectedIndex) && selectedIndex === 0) {
+      break;
+    }
+
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
       selectedUser = savedUsers[selectedIndex - 1];
       console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
+      break;
     }
+
+    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
   }
 
   const currentGlobal = getGitUser("--global") || { name: "", email: "" };
@@ -1086,4 +1154,5 @@ module.exports = {
   runGitRemove,
   runGitUserSwitch,
   runGitUserAdd,
+  runGitUserRemove,
 };

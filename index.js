@@ -5,7 +5,7 @@ const { spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove, runGitUserSwitch, runGitUserAdd } = require("./src/git.js");
+const { runGitSync, runGitReset, runGitLogReset, runGitOpen, runGitRemove, runGitUserSwitch, runGitUserAdd, runGitUserRemove } = require("./src/git.js");
 const { generateGitSshKey, getDefaultSshEmail } = require("./src/ssh.js");
 const { askQuestion, askSshEmail, askSshTag } = require("./src/prompts.js");
 const {
@@ -486,6 +486,11 @@ async function main() {
             return;
         }
 
+        if (args[2] === "remove") {
+            await runGitUserRemove();
+            return;
+        }
+
         // Default action: switch
         if (!args[2] || args[2] === "switch") {
             await runGitUserSwitch();
@@ -499,6 +504,11 @@ async function main() {
 
     if (args[0] === "git" && args[1] === "user" && args[2] === "add") {
         await runGitUserAdd();
+        return;
+    }
+
+    if (args[0] === "git" && args[1] === "user" && args[2] === "remove") {
+        await runGitUserRemove();
         return;
     }
 
