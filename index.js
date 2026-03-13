@@ -576,7 +576,7 @@ async function main() {
         await runGitLogReset();
         return;
     }
-    if (args[0] === "git" && args[1] === "open") {
+    if (args[0] === "git" && (args[1] === "open" || args[1] === "-o")) {
         runGitOpen();
         return;
     }
