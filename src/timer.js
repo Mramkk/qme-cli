@@ -55,26 +55,6 @@ function tryNotifyWindowsBalloon({ title, message }) {
     return !result.error && result.status === 0;
 }
 
-function tryNotifyWindowsMessageBox({ title, message }) {
-    const t = String(title || "").replace(/'/g, "''");
-    const m = String(message || "").replace(/'/g, "''");
-
-    const psScript = [
-        "try {",
-        "Add-Type -AssemblyName PresentationFramework | Out-Null;",
-        `[System.Windows.MessageBox]::Show('${m}','${t}') | Out-Null;`,
-        "exit 0",
-        "} catch { exit 1 }"
-    ].join(" ");
-
-    const result = spawnSync("powershell", ["-NoProfile", "-Command", psScript], {
-        stdio: "ignore",
-        windowsHide: true
-    });
-
-    return !result.error && result.status === 0;
-}
-
 function tryNotifyNodeNotifier({ title, message }) {
     try {
         // Optional dependency if user has it installed.
@@ -87,11 +67,51 @@ function tryNotifyNodeNotifier({ title, message }) {
     }
 }
 
+function tryPopupMac({ title, message }) {
+    const t = String(title || "").replace(/"/g, '\\"');
+    const m = String(message || "").replace(/"/g, '\\"');
+    const script = `display dialog "${m}" with title "${t}" buttons {"OK"} default button 1`;
+    const result = spawnSync("osascript", ["-e", script], { stdio: "ignore" });
+    return !result.error && result.status === 0;
+}
+
+function tryPopupLinux({ title, message }) {
+    const t = String(title || "");
+    const m = String(message || "");
+
+    // Try common GUI dialog tools.
+    const zenity = spawnSync("zenity", ["--info", `--title=${t}`, `--text=${m}`], { stdio: "ignore" });
+    if (!zenity.error && zenity.status === 0) return true;
+
+    const kdialog = spawnSync("kdialog", ["--title", t, "--msgbox", m], { stdio: "ignore" });
+    if (!kdialog.error && kdialog.status === 0) return true;
+
+    const xmessage = spawnSync("xmessage", ["-center", `${t}\n\n${m}`], { stdio: "ignore" });
+    return !xmessage.error && xmessage.status === 0;
+}
+
+function tryPopupWindows({ title, message }) {
+    const t = String(title || "").replace(/'/g, "''");
+    const m = String(message || "").replace(/'/g, "''");
+
+    const psScript = [
+        "$ErrorActionPreference = 'Stop'",
+        "Add-Type -AssemblyName PresentationFramework | Out-Null",
+        `[System.Windows.MessageBox]::Show('${m}','${t}') | Out-Null;`
+    ].join("; ");
+
+    const result = spawnSync("powershell", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", psScript], {
+        stdio: "ignore",
+        windowsHide: true
+    });
+
+    return !result.error && result.status === 0;
+}
+
 function notifyDone({ label, minutes }) {
-    const title = "Qme Timer";
+    const title = "qme timer";
     const message = `${label} (${minutes} min) done`;
 
-    // Prefer native per-OS notification paths.
     if (process.platform === "darwin") {
         if (tryNotifyMac({ title, message })) return true;
         return tryNotifyNodeNotifier({ title, message });
@@ -99,8 +119,7 @@ function notifyDone({ label, minutes }) {
 
     if (process.platform === "win32") {
         if (tryNotifyWindowsBalloon({ title, message })) return true;
-        if (tryNotifyNodeNotifier({ title, message })) return true;
-        return tryNotifyWindowsMessageBox({ title, message });
+        return tryNotifyNodeNotifier({ title, message });
     }
 
     if (process.platform === "linux") {
@@ -108,7 +127,6 @@ function notifyDone({ label, minutes }) {
         return tryNotifyNodeNotifier({ title, message });
     }
 
-    // Fallback: terminal bell
     try {
         process.stdout.write("\x07");
     } catch {
@@ -117,7 +135,18 @@ function notifyDone({ label, minutes }) {
     return false;
 }
 
-async function runTimer({ minutes, label }) {
+function popupDone({ label, minutes }) {
+    const title = "qme timer";
+    const message = `${label} (${minutes} min) done`;
+
+    if (process.platform === "darwin") return tryPopupMac({ title, message });
+    if (process.platform === "win32") return tryPopupWindows({ title, message });
+    if (process.platform === "linux") return tryPopupLinux({ title, message });
+
+    return false;
+}
+
+async function runTimer({ minutes, label, popup = false }) {
     const mins = Number(minutes);
     const safeLabel = String(label || "").trim() || "Timer";
 
@@ -126,8 +155,7 @@ async function runTimer({ minutes, label }) {
     }
 
     const totalSeconds = Math.max(1, Math.round(mins * 60));
-    const startMs = Date.now();
-    const endMs = startMs + totalSeconds * 1000;
+    const endMs = Date.now() + totalSeconds * 1000;
 
     console.log(chalk.blueBright("⏱  Timer started"));
     console.log(chalk.gray(`Label: ${safeLabel}`));
@@ -174,6 +202,11 @@ async function runTimer({ minutes, label }) {
 
     console.log(chalk.green("✅ Timer done"));
     notifyDone({ label: safeLabel, minutes: mins });
+
+    if (popup) {
+        popupDone({ label: safeLabel, minutes: mins });
+    }
+
     return { ok: true };
 }
 

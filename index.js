@@ -66,7 +66,7 @@ function printHelp(options = {}) {
     console.log(chalk.green("  qme config branch <branch-name>"));
     console.log(chalk.green("  qme xampp start|stop|switch <version>"));
     console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
-    console.log(chalk.green("  qme timer <min> <label>"));
+    console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
     console.log();
 
     console.log(chalk.blueBright("Git users:"));
@@ -540,17 +540,20 @@ async function main() {
     }
 
     if (args[0] === "timer") {
-        const minutes = Number(args[1]);
-        const label = args.slice(2).join(" ").trim();
+        const rest = args.slice(1);
+        const popup = rest.includes("--popup") || rest.includes("-p");
+        const cleaned = rest.filter((a) => a !== "--popup" && a !== "-p");
+        const minutes = Number(cleaned[0]);
+        const label = cleaned.slice(1).join(" ").trim();
 
         if (!Number.isFinite(minutes) || minutes <= 0) {
             console.log(chalk.red("❌ Minutes must be a positive number"));
-            console.log(chalk.yellow("Usage: qme timer <min> <label>"));
+            console.log(chalk.yellow("Usage: qme timer <min> <label> [--popup|-p]"));
             process.exit(1);
         }
 
         try {
-            await runTimer({ minutes, label });
+            await runTimer({ minutes, label, popup });
             return;
         } catch (err) {
             console.log(chalk.red("❌ Timer failed"));
