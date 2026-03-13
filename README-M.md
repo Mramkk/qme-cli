@@ -277,9 +277,5 @@ Shortcut for `qme xampp switch [version]`.
 qme xswitch 8.2
 qme xswitch
 ```
-40. `qme timer <min> <label>`
-Simple Pomodoro-style timer. Shows a live countdown and fires a desktop notification on completion (Windows/macOS/Linux).
-```bash
-qme timer 0.01 "notify demo"
-```
+
 

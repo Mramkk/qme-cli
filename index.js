@@ -24,6 +24,7 @@ const { initializeRepo } = require("./src/init.js");
 const { runArtisan } = require("./src/laravel");
 const { runWindowsCommand, runNotepad, runGoogleChat, runHubstaff, runMail, runXamppStart, runXamppStop } = require("./src/windows");
 const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
+const { runTimer } = require("./src/timer");
 
 const args = process.argv.slice(2);
 function getCliVersion() {
@@ -65,6 +66,7 @@ function printHelp(options = {}) {
     console.log(chalk.green("  qme config branch <branch-name>"));
     console.log(chalk.green("  qme xampp start|stop|switch <version>"));
     console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
+    console.log(chalk.green("  qme timer <min> <label>"));
     console.log();
 
     console.log(chalk.blueBright("Git users:"));
@@ -535,6 +537,26 @@ async function main() {
         const tool = args[0] === "n" ? "npm" : args[0];
         runNodeToolCommand(tool, args.slice(1));
         return;
+    }
+
+    if (args[0] === "timer") {
+        const minutes = Number(args[1]);
+        const label = args.slice(2).join(" ").trim();
+
+        if (!Number.isFinite(minutes) || minutes <= 0) {
+            console.log(chalk.red("❌ Minutes must be a positive number"));
+            console.log(chalk.yellow("Usage: qme timer <min> <label>"));
+            process.exit(1);
+        }
+
+        try {
+            await runTimer({ minutes, label });
+            return;
+        } catch (err) {
+            console.log(chalk.red("❌ Timer failed"));
+            console.log(chalk.yellow(err && err.message ? String(err.message) : String(err)));
+            process.exit(1);
+        }
     }
 
     if (args[0] === "git" && args[1] === "sync") {
