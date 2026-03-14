@@ -1247,8 +1247,10 @@ async function runGitUserSwitch() {
 
   let defaultHost = "";
   let defaultOriginTarget = null;
+  let originUrlRaw = "";
   try {
     const originUrl = getProjectRepoUrl();
+    originUrlRaw = originUrl ? String(originUrl).trim() : "";
     const httpUrl = normalizeRepoToHttpUrl(originUrl);
     if (httpUrl) {
       defaultOriginTarget = parseCredentialTarget(httpUrl);
@@ -1293,6 +1295,37 @@ async function runGitUserSwitch() {
   } catch (error) {
     console.log(chalk.red("❌ Failed to clear saved credentials"));
     console.log(chalk.yellow(error.message));
+  }
+
+  // Offer to trigger re-login immediately.
+  if (!originUrlRaw) {
+    return;
+  }
+
+  const wantsRelogin = await askYesNo(
+    chalk.yellow("🔐 Re-login now (runs `git fetch` to trigger sign-in prompt)?"),
+    true,
+  );
+  if (!wantsRelogin) {
+    return;
+  }
+
+  if (/^git@|^ssh:\/\//i.test(originUrlRaw)) {
+    console.log(
+      chalk.gray(
+        "ℹ️ This repo uses an SSH remote. Git won’t prompt for HTTP login; switching accounts requires switching SSH keys/agent.",
+      ),
+    );
+  }
+
+  try {
+    execSync("git fetch", {
+      stdio: "inherit",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "1" },
+    });
+  } catch (error) {
+    console.log(chalk.yellow("⚠️ git fetch failed (you can retry `git fetch` or `git push` manually)"));
+    console.log(chalk.gray(error && error.message ? String(error.message) : String(error)));
   }
 }
 module.exports = {
