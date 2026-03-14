@@ -130,6 +130,109 @@ function rejectGitCredential(target) {
     stdio: ["pipe", "ignore", "ignore"],
   });
 }
+
+function tryGetStoredCredentialUsername(target) {
+  const protocol = String(target?.protocol || "https").trim() || "https";
+  const host = String(target?.host || "").trim();
+  const pathValue = String(target?.path || "").trim();
+  if (!host) {
+    return "";
+  }
+
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) {
+    parts.push(`path=${pathValue}`);
+  }
+  const input = `${parts.join("\n")}\n\n`;
+
+  try {
+    const output = execSync("git credential fill", {
+      input,
+      stdio: ["pipe", "pipe", "ignore"],
+      encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+
+    const line = String(output || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .find((l) => l.toLowerCase().startsWith("username="));
+    if (!line) {
+      return "";
+    }
+    return line.slice("username=".length).trim();
+  } catch {
+    return "";
+  }
+}
+
+function rejectGitCredentialBestEffort(options = {}) {
+  const { hostTarget, originTarget } = options;
+  const base = hostTarget && hostTarget.host ? hostTarget : null;
+  if (!base) {
+    throw new Error("Missing host target");
+  }
+
+  const protocol = String(base.protocol || "https").trim() || "https";
+  const host = String(base.host || "").trim();
+  const providedUsername = String(base.username || "").trim();
+  const providedPath = String(base.path || "").trim();
+
+  const originPath = String(originTarget?.path || "").trim();
+  const originUsername = String(originTarget?.username || "").trim();
+
+  const discoveredHostUsername = tryGetStoredCredentialUsername({ protocol, host });
+  const discoveredOriginUsername =
+    originPath && originTarget && originTarget.host === host
+      ? tryGetStoredCredentialUsername({ protocol, host, path: originPath })
+      : "";
+
+  const candidates = [];
+  const add = (t) => {
+    if (!t || !t.host) {
+      return;
+    }
+    const key = [
+      String(t.protocol || "https"),
+      String(t.host || ""),
+      String(t.path || ""),
+      String(t.username || ""),
+    ].join("|");
+    if (!candidates.some((c) => c.__key === key)) {
+      candidates.push({ ...t, __key: key });
+    }
+  };
+
+  // Broad → specific.
+  add({ protocol, host });
+  if (originPath) add({ protocol, host, path: originPath });
+  if (providedPath) add({ protocol, host, path: providedPath });
+  if (discoveredHostUsername) add({ protocol, host, username: discoveredHostUsername });
+  if (originUsername) add({ protocol, host, username: originUsername });
+  if (providedUsername) add({ protocol, host, username: providedUsername });
+  if (originPath && discoveredOriginUsername)
+    add({ protocol, host, path: originPath, username: discoveredOriginUsername });
+  if (originPath && discoveredHostUsername)
+    add({ protocol, host, path: originPath, username: discoveredHostUsername });
+  if (providedPath && discoveredHostUsername)
+    add({ protocol, host, path: providedPath, username: discoveredHostUsername });
+
+  let attempted = 0;
+  let anyOk = false;
+  for (const candidate of candidates) {
+    attempted += 1;
+    try {
+      // eslint-disable-next-line no-unused-vars
+      const { __key, ...clean } = candidate;
+      rejectGitCredential(clean);
+      anyOk = true;
+    } catch {
+      // keep going
+    }
+  }
+
+  return { attempted, anyOk };
+}
 function normalizeRepoToHttpUrl(repoUrl) {
   const input = String(repoUrl || "").trim();
   if (!input) {
@@ -1169,18 +1272,23 @@ async function runGitUserSwitch() {
   }
 
   try {
-    // Prefer clearing by host (what most users want), but also try a more specific match when we can,
-    // because some helpers (e.g. osxkeychain) may store per-path/per-username entries.
-    const hostOnlyTarget = { protocol: target.protocol, host: target.host };
-    rejectGitCredential(hostOnlyTarget);
-    if (target.path || target.username) {
-      rejectGitCredential(target);
-    } else if (defaultOriginTarget && defaultOriginTarget.host === target.host) {
-      // If the user cleared by host, also attempt the current repo origin target.
-      rejectGitCredential(defaultOriginTarget);
-    }
+    const originTargetToUse =
+      defaultOriginTarget && defaultOriginTarget.host === target.host
+        ? defaultOriginTarget
+        : null;
+    const result = rejectGitCredentialBestEffort({
+      hostTarget: target,
+      originTarget: originTargetToUse,
+    });
 
     console.log(chalk.green(`✅ Cleared saved credentials for ${target.host}`));
+    if (!result.anyOk) {
+      console.log(
+        chalk.yellow(
+          "⚠️ Credential helper did not confirm clearing. You may still be signed in via another helper (e.g. GitHub CLI / GCM).",
+        ),
+      );
+    }
     console.log(chalk.gray("ℹ️ Next git push/pull will ask you to sign in again."));
   } catch (error) {
     console.log(chalk.red("❌ Failed to clear saved credentials"));
