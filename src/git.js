@@ -77,7 +77,10 @@ function parseCredentialTarget(inputRaw) {
       if (!host) {
         return null;
       }
-      return { protocol: protocol || "https", host };
+      const username = url.username ? decodeURIComponent(url.username) : "";
+      const pathFromUrl = url.pathname ? String(url.pathname).replace(/^\/+/, "") : "";
+      const pathValue = pathFromUrl && pathFromUrl !== "/" ? pathFromUrl : "";
+      return { protocol: protocol || "https", host, username, path: pathValue };
     } catch {
       return null;
     }
@@ -86,18 +89,18 @@ function parseCredentialTarget(inputRaw) {
   // SCP-like SSH: git@host:owner/repo.git
   const scpMatch = input.match(/^git@([^:]+):(.+)$/);
   if (scpMatch) {
-    return { protocol: "https", host: scpMatch[1] };
+    return { protocol: "https", host: scpMatch[1], username: "", path: scpMatch[2] };
   }
 
   // ssh://git@host/owner/repo.git
   const sshMatch = input.match(/^ssh:\/\/git@([^/]+)\/(.+)$/);
   if (sshMatch) {
-    return { protocol: "https", host: sshMatch[1] };
+    return { protocol: "https", host: sshMatch[1], username: "", path: sshMatch[2] };
   }
 
   // Hostname only
   if (/^[a-z0-9.-]+$/i.test(input)) {
-    return { protocol: "https", host: input };
+    return { protocol: "https", host: input, username: "", path: "" };
   }
 
   return null;
@@ -106,13 +109,22 @@ function parseCredentialTarget(inputRaw) {
 function rejectGitCredential(target) {
   const protocol = String(target?.protocol || "https").trim() || "https";
   const host = String(target?.host || "").trim();
+  const username = String(target?.username || "").trim();
+  const pathValue = String(target?.path || "").trim();
   if (!host) {
     throw new Error("Missing host for credential reject");
   }
 
   // Ask git to remove stored creds for this host via the configured credential helper.
   // https://git-scm.com/docs/git-credential
-  const input = `protocol=${protocol}\nhost=${host}\n\n`;
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) {
+    parts.push(`path=${pathValue}`);
+  }
+  if (username) {
+    parts.push(`username=${username}`);
+  }
+  const input = `${parts.join("\n")}\n\n`;
   execSync("git credential reject", {
     input,
     stdio: ["pipe", "ignore", "ignore"],
@@ -1099,6 +1111,33 @@ async function runGitUserSwitch() {
         console.log(chalk.green("✅ Set credential.helper = manager-core"));
       }
     }
+    if (process.platform === "darwin" && !helper) {
+      const shouldSet = await askYesNo(
+        chalk.yellow("🔐 credential.helper is not set. Set it to osxkeychain (macOS Keychain)?"),
+        true,
+      );
+      if (shouldSet) {
+        setGlobalGitConfigValue("credential.helper", "osxkeychain");
+        console.log(chalk.green("✅ Set credential.helper = osxkeychain"));
+      }
+    }
+    if (
+      process.platform === "darwin" &&
+      helper &&
+      /manager/i.test(helper) &&
+      !/osxkeychain/i.test(helper)
+    ) {
+      const shouldSwitch = await askYesNo(
+        chalk.yellow(
+          `🔐 credential.helper is set to "${helper}". Switch to osxkeychain (macOS Keychain)?`,
+        ),
+        false,
+      );
+      if (shouldSwitch) {
+        setGlobalGitConfigValue("credential.helper", "osxkeychain");
+        console.log(chalk.green("✅ Set credential.helper = osxkeychain"));
+      }
+    }
   } catch {
     // Non-fatal
   }
@@ -1112,10 +1151,12 @@ async function runGitUserSwitch() {
   }
 
   let defaultHost = "";
+  let defaultTargetValue = "";
   try {
     const originUrl = getProjectRepoUrl();
     const httpUrl = normalizeRepoToHttpUrl(originUrl);
     if (httpUrl) {
+      defaultTargetValue = httpUrl;
       defaultHost = new URL(httpUrl).hostname;
     }
   } catch {
@@ -1124,10 +1165,10 @@ async function runGitUserSwitch() {
 
   const targetRaw = await askQuestion(
     chalk.yellow(
-      `🌐 Enter remote URL or host to clear${defaultHost ? ` [${defaultHost}]` : ""}: `,
+      `🌐 Enter remote URL or host to clear${defaultTargetValue ? ` [${defaultTargetValue}]` : (defaultHost ? ` [${defaultHost}]` : "")}: `,
     ),
   );
-  const target = parseCredentialTarget(targetRaw || defaultHost);
+  const target = parseCredentialTarget(targetRaw || defaultTargetValue || defaultHost);
   if (!target) {
     console.log(chalk.yellow("⚠️ Could not parse host. Skipped clearing credentials."));
     return;
