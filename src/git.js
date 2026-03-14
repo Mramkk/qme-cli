@@ -907,11 +907,12 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
 function showLastCommits() {
   try {
     console.log();
-    execSync("git --no-pager log -10 --decorate --oneline", {
+    // Reflog shows recent HEAD movements (commits, pulls, rebases, resets, checkouts).
+    execSync("git reflog", {
       stdio: "inherit",
     });
   } catch {
-    console.log(chalk.red("❌ Could not read git log"));
+    console.log(chalk.red("❌ Could not read git reflog"));
   }
 }
 

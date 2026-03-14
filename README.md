@@ -65,6 +65,7 @@ qme git log
 
 6. `qme git open`
 Opens current repository remote URL in browser at the current branch page.
+Alias: `qme git -o`
 ```bash
 qme git open
 ```
@@ -277,9 +278,12 @@ Shortcut for `qme xampp switch [version]`.
 qme xswitch 8.2
 qme xswitch
 ```
-40. `qme timer <min> <label>`
+40. `qme timer <min> <label> [--popup|-p]`
 Simple Pomodoro-style timer. Shows a live countdown and fires a desktop notification on completion (Windows/macOS/Linux).
+Use `--popup` (or `-p`) to also show a popup dialog when the timer ends.
+Note (Linux): notifications use `notify-send`; popup uses `zenity` (or `kdialog`/`xmessage`) if installed.
 ```bash
-qme timer 0.01 "notify demo"
+qme timer 25 "Deep work"
+qme timer 0.01 "notify demo" --popup
 ```
 
