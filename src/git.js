@@ -1142,40 +1142,44 @@ async function runGitUserSwitch() {
     // Non-fatal
   }
 
-  const shouldClear = await askYesNo(
-    chalk.yellow("🔐 Clear saved credentials for a host (so Git prompts login again)?"),
-    true,
-  );
-  if (!shouldClear) {
-    return;
-  }
-
   let defaultHost = "";
-  let defaultTargetValue = "";
+  let defaultOriginTarget = null;
   try {
     const originUrl = getProjectRepoUrl();
     const httpUrl = normalizeRepoToHttpUrl(originUrl);
     if (httpUrl) {
-      defaultTargetValue = httpUrl;
+      defaultOriginTarget = parseCredentialTarget(httpUrl);
       defaultHost = new URL(httpUrl).hostname;
     }
   } catch {
     // ignore
   }
 
-  const targetRaw = await askQuestion(
-    chalk.yellow(
-      `🌐 Enter remote URL or host to clear${defaultTargetValue ? ` [${defaultTargetValue}]` : (defaultHost ? ` [${defaultHost}]` : "")}: `,
-    ),
-  );
-  const target = parseCredentialTarget(targetRaw || defaultTargetValue || defaultHost);
+  // After switching users, clear the current credential "session" so the next push/pull
+  // prompts for the correct account.
+  const targetRaw = defaultHost
+    ? ""
+    : await askQuestion(
+        chalk.yellow("🌐 Enter host (or remote URL) to clear (Enter = skip): "),
+      );
+  const target = parseCredentialTarget(targetRaw || defaultHost);
   if (!target) {
-    console.log(chalk.yellow("⚠️ Could not parse host. Skipped clearing credentials."));
+    console.log(chalk.gray("ℹ️ Skipped clearing saved credentials."));
     return;
   }
 
   try {
-    rejectGitCredential(target);
+    // Prefer clearing by host (what most users want), but also try a more specific match when we can,
+    // because some helpers (e.g. osxkeychain) may store per-path/per-username entries.
+    const hostOnlyTarget = { protocol: target.protocol, host: target.host };
+    rejectGitCredential(hostOnlyTarget);
+    if (target.path || target.username) {
+      rejectGitCredential(target);
+    } else if (defaultOriginTarget && defaultOriginTarget.host === target.host) {
+      // If the user cleared by host, also attempt the current repo origin target.
+      rejectGitCredential(defaultOriginTarget);
+    }
+
     console.log(chalk.green(`✅ Cleared saved credentials for ${target.host}`));
     console.log(chalk.gray("ℹ️ Next git push/pull will ask you to sign in again."));
   } catch (error) {
