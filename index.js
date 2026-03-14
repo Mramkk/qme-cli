@@ -8,7 +8,6 @@ const path = require("path");
 const {
   runGitSync,
   runGitReset,
-  runGitLogReset,
   runGitOpen,
   runGitRemove,
   runGitUserSwitch,
@@ -76,7 +75,7 @@ function printHelp(options = {}) {
   console.log(chalk.blueBright("Common commands:"));
   console.log(chalk.green("  qme init [--branch <name>]"));
   console.log(chalk.green("  qme recent"));
-  console.log(chalk.green("  qme git sync|reset|log|open|remove"));
+	  console.log(chalk.green("  qme git sync|reset|open|remove"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(
     chalk.green(
@@ -679,14 +678,10 @@ async function main() {
     return;
   }
 
-  if (args[0] === "git" && args[1] === "log") {
-    await runGitLogReset();
-    return;
-  }
-  if (args[0] === "git" && (args[1] === "open" || args[1] === "-o")) {
-    runGitOpen();
-    return;
-  }
+	  if (args[0] === "git" && (args[1] === "open" || args[1] === "-o")) {
+	    runGitOpen();
+	    return;
+	  }
   // Git users (multiple accounts)
   // New command: `qme git users` (defaults to switch), keeping legacy `qme git user switch` working.
   if (args[0] === "git" && args[1] === "users") {

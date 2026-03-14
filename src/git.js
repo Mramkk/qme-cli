@@ -423,11 +423,6 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
-  if (action === "log") {
-    showLastCommits();
-    process.exit(0);
-  }
-
   if (action === "commit") {
     const message = await askCommitMessage();
     const didCommit = commitChanges(message);
@@ -1150,7 +1145,6 @@ async function runGitUserSwitch() {
 module.exports = {
   runGitSync,
   runGitReset,
-  runGitLogReset,
   runGitOpen,
   runGitRemove,
   runGitUserSwitch,
