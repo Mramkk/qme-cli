@@ -1262,14 +1262,24 @@ async function runGitUserSwitch() {
 
   // After switching users, clear the current credential "session" so the next push/pull
   // prompts for the correct account.
+  const shouldRemoveCreds = await askYesNo(
+    chalk.yellow(
+      `🔐 Remove saved git credentials${defaultHost ? ` for ${defaultHost}` : ""}?`,
+    ),
+    true,
+  );
+  if (!shouldRemoveCreds) {
+    return;
+  }
+
   const targetRaw = defaultHost
     ? ""
     : await askQuestion(
-        chalk.yellow("🌐 Enter host (or remote URL) to clear (Enter = skip): "),
+        chalk.yellow("🌐 Enter remote host (or URL) to clear (Enter = cancel): "),
       );
   const target = parseCredentialTarget(targetRaw || defaultHost);
   if (!target) {
-    console.log(chalk.gray("ℹ️ Skipped clearing saved credentials."));
+    console.log(chalk.gray("ℹ️ Cancelled clearing saved credentials."));
     return;
   }
 
