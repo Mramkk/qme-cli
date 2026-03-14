@@ -223,6 +223,53 @@ function deleteMacKeychainCredentialsBestEffort(options = {}) {
   return { attempted, deleted };
 }
 
+function isCommandAvailable(command) {
+  const safe = String(command || "").trim();
+  if (!safe) {
+    return false;
+  }
+  try {
+    execSync(`command -v ${safe}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isSshRemote(remoteUrl) {
+  const raw = String(remoteUrl || "").trim();
+  return /^git@/i.test(raw) || /^ssh:\/\//i.test(raw);
+}
+
+function tryLogoutGh(host) {
+  if (!host || !isCommandAvailable("gh")) {
+    return false;
+  }
+  try {
+    execSync(`gh auth logout -h "${String(host).replace(/"/g, '\\"')}" --yes`, {
+      stdio: "inherit",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryClearSshAgent() {
+  if (!isCommandAvailable("ssh-add")) {
+    return false;
+  }
+  if (!process.env.SSH_AUTH_SOCK) {
+    return false;
+  }
+  try {
+    execSync("ssh-add -D", { stdio: "inherit" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function rejectGitCredentialBestEffort(options = {}) {
   const { hostTarget, originTarget } = options;
   const base = hostTarget && hostTarget.host ? hostTarget : null;
@@ -1383,6 +1430,43 @@ async function runGitUserSwitch() {
   } catch (error) {
     console.log(chalk.red("❌ Failed to clear saved credentials"));
     console.log(chalk.yellow(error.message));
+  }
+
+  // Optional: clear other "sessions" (GitHub CLI / SSH agent).
+  const shouldClearSessions = await askYesNo(
+    chalk.yellow("🧹 Also remove auth sessions (GitHub CLI / SSH agent)?"),
+    false,
+  );
+  if (shouldClearSessions) {
+    const host = target.host;
+    const sshRemote = isSshRemote(originUrlRaw);
+
+    if (sshRemote) {
+      console.log(
+        chalk.yellow(
+          "⚠️ SSH remote detected. Clearing SSH agent will remove all loaded keys (ssh-add -D).",
+        ),
+      );
+      const ok = tryClearSshAgent();
+      if (ok) {
+        console.log(chalk.green("✅ Cleared SSH agent keys (ssh-add -D)"));
+      } else {
+        console.log(
+          chalk.gray(
+            "ℹ️ Skipped clearing SSH agent (ssh-add not available, no SSH_AUTH_SOCK, or command failed).",
+          ),
+        );
+      }
+    }
+
+    if (isCommandAvailable("gh")) {
+      const ok = tryLogoutGh(host);
+      if (ok) {
+        console.log(chalk.green(`✅ Logged out GitHub CLI for ${host}`));
+      } else {
+        console.log(chalk.gray(`ℹ️ Skipped GitHub CLI logout for ${host}`));
+      }
+    }
   }
 
   // Offer to trigger re-login immediately.
