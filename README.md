@@ -28,7 +28,7 @@ qme --version
 ## Commands (With Example)
 
 1. `qme git sync`
-   Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`) when `project_id` is configured.
+   Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`)
 
 ```bash
 qme git sync
