@@ -63,7 +63,8 @@ function printHelp(options = {}) {
 
   const version = getCliVersion();
   const header = version ? `qme v${version}` : "qme";
-
+  console.log();
+  console.log();
   console.log(chalk.blueBright(header));
   console.log(chalk.gray("Developer command-line toolkit"));
   console.log();
@@ -73,9 +74,9 @@ function printHelp(options = {}) {
   console.log();
 
   console.log(chalk.blueBright("Common commands:"));
-  console.log(chalk.green("  qme init [--branch <name>]"));
-  console.log(chalk.green("  qme recent"));
-  console.log(chalk.green("  qme git sync|reset|open|remove"));
+  // console.log(chalk.green("  qme init [--branch <name>]"));
+  // console.log(chalk.green("  qme recent"));
+  console.log(chalk.green("  qme git sync"));
   console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(
@@ -83,11 +84,11 @@ function printHelp(options = {}) {
       "  qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]",
     ),
   );
-  console.log(chalk.green("  qme config export [output-path]"));
-  console.log(chalk.green("  qme config branch <branch-name>"));
-  console.log(chalk.green("  qme xampp start|stop|switch <version>"));
-  console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
-  console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
+  // console.log(chalk.green("  qme config export [output-path]"));
+  // console.log(chalk.green("  qme config branch <branch-name>"));
+  // console.log(chalk.green("  qme xampp start|stop|switch <version>"));
+  // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
+  // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
 
   console.log(chalk.blueBright("Git users:"));
@@ -679,10 +680,10 @@ async function main() {
     return;
   }
 
-	  if (args[0] === "git" && (args[1] === "open" || args[1] === "-o")) {
-	    runGitOpen();
-	    return;
-	  }
+  if (args[0] === "git" && (args[1] === "open" || args[1] === "-o")) {
+    runGitOpen();
+    return;
+  }
   // Git users (multiple accounts)
   // New command: `qme git users` (defaults to switch), keeping legacy `qme git user switch` working.
   if (args[0] === "git" && args[1] === "users") {
