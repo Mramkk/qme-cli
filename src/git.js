@@ -166,6 +166,63 @@ function tryGetStoredCredentialUsername(target) {
   }
 }
 
+function deleteMacKeychainInternetPassword(options = {}) {
+  if (process.platform !== "darwin") {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const host = String(options?.host || "").trim();
+  const username = String(options?.username || "").trim();
+  if (!host) {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const attemptedArgs = username
+    ? ["delete-internet-password", "-s", host, "-a", username]
+    : ["delete-internet-password", "-s", host];
+
+  try {
+    execSync(`security ${attemptedArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`, {
+      stdio: "ignore",
+    });
+    return { attempted: 1, deleted: 1 };
+  } catch {
+    return { attempted: 1, deleted: 0 };
+  }
+}
+
+function deleteMacKeychainCredentialsBestEffort(options = {}) {
+  if (process.platform !== "darwin") {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const host = String(options?.host || "").trim();
+  if (!host) {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const usernames = Array.isArray(options?.usernames)
+    ? options.usernames.map((u) => String(u || "").trim()).filter(Boolean)
+    : [];
+
+  const uniqueUsernames = [...new Set(usernames)];
+  let attempted = 0;
+  let deleted = 0;
+
+  // Prefer targeted deletes by username first (safer), then fall back to host-only.
+  for (const user of uniqueUsernames) {
+    const res = deleteMacKeychainInternetPassword({ host, username: user });
+    attempted += res.attempted;
+    deleted += res.deleted;
+  }
+
+  const resHostOnly = deleteMacKeychainInternetPassword({ host });
+  attempted += resHostOnly.attempted;
+  deleted += resHostOnly.deleted;
+
+  return { attempted, deleted };
+}
+
 function rejectGitCredentialBestEffort(options = {}) {
   const { hostTarget, originTarget } = options;
   const base = hostTarget && hostTarget.host ? hostTarget : null;
@@ -231,7 +288,12 @@ function rejectGitCredentialBestEffort(options = {}) {
     }
   }
 
-  return { attempted, anyOk };
+  return {
+    attempted,
+    anyOk,
+    discoveredHostUsername,
+    discoveredOriginUsername,
+  };
 }
 function normalizeRepoToHttpUrl(repoUrl) {
   const input = String(repoUrl || "").trim();
@@ -1292,6 +1354,22 @@ async function runGitUserSwitch() {
       hostTarget: target,
       originTarget: originTargetToUse,
     });
+
+    // On macOS, also try deleting Keychain entries directly. Some setups still keep old
+    // Internet Password items even after `git credential reject`.
+    if (process.platform === "darwin") {
+      const keychainUsernames = [
+        target.username,
+        target.path ? tryGetStoredCredentialUsername({ protocol: target.protocol, host: target.host, path: target.path }) : "",
+        result.discoveredHostUsername,
+        result.discoveredOriginUsername,
+        originTargetToUse?.username,
+      ].filter(Boolean);
+      deleteMacKeychainCredentialsBestEffort({
+        host: target.host,
+        usernames: keychainUsernames,
+      });
+    }
 
     console.log(chalk.green(`✅ Cleared saved credentials for ${target.host}`));
     if (!result.anyOk) {
