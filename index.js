@@ -75,7 +75,8 @@ function printHelp(options = {}) {
   console.log(chalk.blueBright("Common commands:"));
   console.log(chalk.green("  qme init [--branch <name>]"));
   console.log(chalk.green("  qme recent"));
-	  console.log(chalk.green("  qme git sync|reset|open|remove"));
+  console.log(chalk.green("  qme git sync|reset|open|remove"));
+  console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(
     chalk.green(
