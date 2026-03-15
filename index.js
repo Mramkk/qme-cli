@@ -77,6 +77,7 @@ function printHelp(options = {}) {
   // console.log(chalk.green("  qme init [--branch <name>]"));
   // console.log(chalk.green("  qme recent"));
   console.log(chalk.green("  qme git sync"));
+  console.log(chalk.gray("  Alias: qme gsync   (same as: qme git sync)"));
   console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(
@@ -668,6 +669,11 @@ async function main() {
       );
       process.exit(1);
     }
+  }
+
+  if (args[0] === "gsync") {
+    await runGitSync();
+    return;
   }
 
   if (args[0] === "git" && args[1] === "sync") {
