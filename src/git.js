@@ -1546,47 +1546,42 @@ async function runGitUserSwitch() {
   const keychainDeleteEnabled = /^(1|true|yes)$/i.test(
     String(process.env.QME_KEYCHAIN_DELETE || "").trim(),
   );
-  const ghLogoutEnabled = /^(1|true|yes)$/i.test(
-    String(process.env.QME_GH_LOGOUT || "").trim(),
-  );
+	  const ghLogoutEnabled = /^(1|true|yes)$/i.test(
+	    String(process.env.QME_GH_LOGOUT || "").trim(),
+	  );
 
-  while (savedUsers.length > 0) {
-    console.log();
-    console.log(chalk.blueBright("👥 Saved git users:"));
-    console.log(chalk.green("  0) Enter manually"));
-    console.log(chalk.yellow("  r) Remove a saved user"));
-    savedUsers.forEach((user, index) => {
-      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
-    });
+	  while (savedUsers.length > 0) {
+	    console.log();
+	    console.log(chalk.blueBright("👥 Saved git users:"));
+	    console.log(chalk.yellow("  r) Remove a saved user"));
+	    savedUsers.forEach((user, index) => {
+	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+	    });
 
-    const answerRaw = await askQuestion(
-      chalk.yellow(`👉 Choose user (0-${savedUsers.length}) (r = remove, Enter = cancel): `),
-    );
-    const answer = String(answerRaw || "").trim().toLowerCase();
+	    const answerRaw = await askQuestion(
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (r = remove, Enter = cancel): `),
+	    );
+	    const answer = String(answerRaw || "").trim().toLowerCase();
 
-    if (!answer) {
-      console.log(chalk.yellow("ℹ️ Cancelled."));
-      return;
-    }
-    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
-      await runGitUserRemove();
-      savedUsers = getGitUsers();
-      continue;
-    }
+	    if (!answer) {
+	      console.log(chalk.yellow("ℹ️ Cancelled."));
+	      return;
+	    }
+	    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
+	      await runGitUserRemove();
+	      savedUsers = getGitUsers();
+	      continue;
+	    }
 
-    const selectedIndex = Number.parseInt(answer, 10);
-    if (Number.isInteger(selectedIndex) && selectedIndex === 0) {
-      break;
-    }
+	    const selectedIndex = Number.parseInt(answer, 10);
+	    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
+	      selectedUser = savedUsers[selectedIndex - 1];
+	      console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
+	      break;
+	    }
 
-    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
-      selectedUser = savedUsers[selectedIndex - 1];
-      console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
-      break;
-    }
-
-    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
-  }
+	    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
+	  }
 
   const currentGlobal = getGitUser("--global") || { name: "", email: "" };
 
