@@ -587,6 +587,10 @@ function rejectGitCredentialBestEffort(options = {}) {
     throw new Error("Missing host target");
   }
 
+  const discoverUsername = /^(1|true|yes)$/i.test(
+    String(process.env.QME_DISCOVER_CREDENTIAL_USERNAME || "").trim(),
+  );
+
   const protocol = String(base.protocol || "https").trim() || "https";
   const host = String(base.host || "").trim();
   const providedUsername = String(base.username || "").trim();
@@ -595,9 +599,13 @@ function rejectGitCredentialBestEffort(options = {}) {
   const originPath = String(originTarget?.path || "").trim();
   const originUsername = String(originTarget?.username || "").trim();
 
-  const discoveredHostUsername = tryGetStoredCredentialUsername({ protocol, host });
+  // NOTE: `git credential fill` can trigger macOS Keychain "login required" prompts.
+  // Keep it opt-in via env var.
+  const discoveredHostUsername = discoverUsername
+    ? tryGetStoredCredentialUsername({ protocol, host })
+    : "";
   const discoveredOriginUsername =
-    originPath && originTarget && originTarget.host === host
+    discoverUsername && originPath && originTarget && originTarget.host === host
       ? tryGetStoredCredentialUsername({ protocol, host, path: originPath })
       : "";
 
@@ -1344,12 +1352,6 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
     console.log(chalk.green("✅ Pull completed"));
   } catch (error) {
     console.log(chalk.red(`❌ Pull failed: ${formatGitError(error)}`));
-    console.log(chalk.yellow(`ℹ️ If this is an unrelated history case, run:`));
-    console.log(
-      chalk.yellow(
-        `   git pull ${REMOTE} ${remoteBranch} --allow-unrelated-histories --no-edit`,
-      ),
-    );
     return;
   }
 
@@ -1540,6 +1542,12 @@ async function runGitUserSwitch() {
   const inRepo = isInsideGitRepo();
   const debugCreds = /^(1|true|yes)$/i.test(
     String(process.env.QME_DEBUG_CREDENTIALS || "").trim(),
+  );
+  const keychainDeleteEnabled = /^(1|true|yes)$/i.test(
+    String(process.env.QME_KEYCHAIN_DELETE || "").trim(),
+  );
+  const ghLogoutEnabled = /^(1|true|yes)$/i.test(
+    String(process.env.QME_GH_LOGOUT || "").trim(),
   );
 
   while (savedUsers.length > 0) {
@@ -1735,13 +1743,13 @@ async function runGitUserSwitch() {
   while (!target) {
     const targetRaw = await askQuestion(
       chalk.yellow(
-        `🌐 Enter remote host${defaultHost ? ` [${defaultHost}]` : ""} (Enter = ${defaultHost ? "default" : "required"}): `,
+        `🌐 Enter remote host${defaultHost ? ` [${defaultHost}]` : ""} (Enter = ${defaultHost ? "default" : "cancel"}): `,
       ),
     );
     const raw = String(targetRaw || "").trim();
     if (!raw && !defaultHost) {
-      console.log(chalk.yellow("⚠️ Remote host is required (example: github.com)"));
-      continue;
+      target = null;
+      break;
     }
     if (/^(c|cancel|exit|quit)$/i.test(raw)) {
       target = null;
@@ -1771,20 +1779,24 @@ async function runGitUserSwitch() {
     // Internet Password items even after `git credential reject`.
     // Additionally, explicitly call common helpers when present.
     if (process.platform === "darwin") {
-      const keychainUsernames = [
-        target.username,
-        target.path ? tryGetStoredCredentialUsername({ protocol: target.protocol, host: target.host, path: target.path }) : "",
-        result.discoveredHostUsername,
-        result.discoveredOriginUsername,
-        originTargetToUse?.username,
-      ].filter(Boolean);
-      const keychainResult = deleteMacKeychainCredentialsBestEffort({
-        host: target.host,
-        protocol: target.protocol,
-        usernames: keychainUsernames,
-      });
-      if (debugCreds && keychainResult.deleted > 0) {
-        console.log(chalk.green(`✅ Keychain: removed ${keychainResult.deleted} item(s)`));
+      // Keychain deletion can trigger macOS permission prompts (password/Touch ID).
+      // Keep it opt-in via env var to avoid "login required" popups.
+      if (keychainDeleteEnabled) {
+        const keychainUsernames = [
+          target.username,
+          target.path ? tryGetStoredCredentialUsername({ protocol: target.protocol, host: target.host, path: target.path }) : "",
+          result.discoveredHostUsername,
+          result.discoveredOriginUsername,
+          originTargetToUse?.username,
+        ].filter(Boolean);
+        const keychainResult = deleteMacKeychainCredentialsBestEffort({
+          host: target.host,
+          protocol: target.protocol,
+          usernames: keychainUsernames,
+        });
+        if (debugCreds && keychainResult.deleted > 0) {
+          console.log(chalk.green(`✅ Keychain: removed ${keychainResult.deleted} item(s)`));
+        }
       }
 
       // Try helper erases explicitly (works even if credential.helper isn't set correctly).
@@ -1801,11 +1813,14 @@ async function runGitUserSwitch() {
         gitCredentialEraseViaHelper({ helper: "credential-manager", ...t });
         gitCredentialEraseViaHelper({ helper: "credential-manager-core", ...t });
         if (t.path) {
-          const u = tryGetStoredCredentialUsername(t);
-          if (u) {
-            gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t, username: u });
-            gitCredentialEraseViaHelper({ helper: "credential-manager", ...t, username: u });
-            gitCredentialEraseViaHelper({ helper: "credential-manager-core", ...t, username: u });
+          // Username discovery is opt-in (can trigger Keychain prompts on macOS).
+          if (/^(1|true|yes)$/i.test(String(process.env.QME_DISCOVER_CREDENTIAL_USERNAME || "").trim())) {
+            const u = tryGetStoredCredentialUsername(t);
+            if (u) {
+              gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t, username: u });
+              gitCredentialEraseViaHelper({ helper: "credential-manager", ...t, username: u });
+              gitCredentialEraseViaHelper({ helper: "credential-manager-core", ...t, username: u });
+            }
           }
         }
       }
@@ -1854,11 +1869,11 @@ async function runGitUserSwitch() {
     console.log(chalk.yellow(error.message));
   }
 
-  // Auto: logout GitHub CLI session too (common cause of "still logged in" confusion).
+  // Optional: logout GitHub CLI session too (can prompt/revoke depending on setup).
   const host = target.host;
-  if (isCommandAvailable("gh")) {
+  if (ghLogoutEnabled && isCommandAvailable("gh")) {
     const ok = tryLogoutGh(host);
-    if (ok) {
+    if (debugCreds && ok) {
       console.log(chalk.green(`✅ GitHub CLI: logged out for ${host}`));
     }
   }
@@ -1889,7 +1904,6 @@ async function runGitUserSwitch() {
     }
   }
 
-  // Re-login is manual: run `git fetch` or `git push` when you want to authenticate again.
 }
 module.exports = {
   runGitSync,
