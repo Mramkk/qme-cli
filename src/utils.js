@@ -15,7 +15,10 @@ function getGitUser(scope) {
 function getProjectRepoUrl() {
     // Prefer git itself (works from any subdirectory and respects worktrees).
     try {
-        const url = execSync("git remote get-url origin", { encoding: "utf8" }).trim();
+        const url = execSync("git remote get-url origin", {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"]
+        }).trim();
         return url || null;
     } catch {
         // fall through
@@ -25,7 +28,10 @@ function getProjectRepoUrl() {
     try {
         let gitDir = "";
         try {
-            gitDir = execSync("git rev-parse --git-dir", { encoding: "utf8" }).trim();
+            gitDir = execSync("git rev-parse --git-dir", {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"]
+            }).trim();
         } catch {
             gitDir = path.join(process.cwd(), ".git");
         }
