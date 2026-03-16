@@ -67,3 +67,47 @@ qme git repo project id 123
 ```bash
 qme config branch develop
 ```
+## Custom aliases
+
+Create your own shortcuts without forking `qme` by saving aliases in the qme config file.
+
+```bash
+# Add / update (recommended)
+qme alias add <name> -- <command...>
+
+# PowerShell-safe (if -- gets swallowed)
+qme alias add <name> "--" <command...>
+
+# List
+qme alias list
+
+# Remove
+qme alias remove <name>
+```
+
+Examples:
+
+```bash
+qme alias add gs -- git sync
+qme gs
+
+# Cross-platform open URL (use this instead of Windows `start`)
+qme open http://localhost:8000
+qme alias add web -- open http://localhost:8000
+qme web
+
+
+```
+
+Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.json`) under `system.aliases`:
+
+```json
+{
+  "system": {
+    "aliases": {
+      "gs": ["git", "sync"]
+    }
+  }
+}
+```
+
