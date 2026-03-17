@@ -273,7 +273,7 @@ qme notes "follow up tomorrow"
 ```
 
 33. `qme quit`
-    Force closes apps and shuts down Windows.
+    Runs `qme xstop` first, then force closes apps and shuts down Windows.
 
 ```bash
 qme quit

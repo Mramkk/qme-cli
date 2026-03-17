@@ -1161,6 +1161,18 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
   }
 
   if (args[0] === "quit") {
+    if (process.platform !== "win32") {
+      console.log(chalk.red("❌ This command is only available on Windows"));
+      process.exit(1);
+    }
+
+    try {
+      // Stop XAMPP before shutting down the machine.
+      await runXamppStop({ strict: true, killDevProcesses: false });
+    } catch (error) {
+      process.exit(1);
+    }
+
     runWindowsCommand("quit");
     return;
   }
