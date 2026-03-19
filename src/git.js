@@ -1226,7 +1226,7 @@ function commitChanges(message) {
     return false;
   }
 
-  const finalMessage = withTimestampPrefix(message);
+  const finalMessage = withoutTimestampPrefix(message);
   execSync("git add -A", { stdio: "ignore" });
   try {
     execSync(`git commit -m "${finalMessage.replace(/"/g, '\\"')}"`, {
@@ -1307,27 +1307,12 @@ function formatGitError(error) {
   return line || "unknown git error";
 }
 
-function withTimestampPrefix(message) {
+function withoutTimestampPrefix(message) {
   const text = String(message || "").trim();
   const existingPrefixPattern =
     /^@?\[[A-Za-z]{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s*/;
-  if (existingPrefixPattern.test(text)) {
-    return text;
-  }
-
-  const now = new Date();
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const day = dayNames[now.getDay()];
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const date = String(now.getDate()).padStart(2, "0");
-  const hour24 = now.getHours();
-  const hour12 = hour24 % 12 || 12;
-  const hours = String(hour12).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const stamp = `[${day} ${year}-${month}-${date} ${hours}:${minutes}]`;
-
-  return text ? `${stamp} ${text}` : stamp;
+  const stripped = text.replace(existingPrefixPattern, "").trim();
+  return stripped || text;
 }
 
 /* ---------- PULL | SKIP ---------- */
