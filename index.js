@@ -46,6 +46,7 @@ const {
 const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 const { runTimer } = require("./src/timer");
 const { runOpen } = require("./src/open");
+const { fixPemPermissions } = require("./src/pem");
 
 function getCliVersion() {
   try {
@@ -86,6 +87,7 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme open <url>"));
+  console.log(chalk.green("  qme pem -f <path-to-pem>"));
   console.log(
     chalk.green(
       "  qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]",
@@ -839,6 +841,31 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     runOpen(url);
     return;
   }
+  if (args[0] === "pem") {
+    if (process.platform !== "win32") {
+      console.log(chalk.red("❌ This command is only available on Windows"));
+      process.exit(1);
+    }
+
+    let rawTarget = getOptionValue(args, ["--file", "-f"]);
+    if (!rawTarget && args[1] && !String(args[1]).startsWith("-")) {
+      rawTarget = args[1];
+    }
+
+    if (!rawTarget) {
+      rawTarget = await askQuestion(chalk.magenta("🔑 Enter PEM file path: "));
+    }
+
+    const resolvedPath = parseFileUriToPath(rawTarget);
+    if (!resolvedPath) {
+      console.log(chalk.red("❌ Invalid PEM file path"));
+      console.log(chalk.yellow('Usage: qme pem -f "C:\\path\\to\\file.pem"'));
+      process.exit(1);
+    }
+
+    fixPemPermissions(resolvedPath);
+    return;
+  }
 
   if (args[0] === "npm" || args[0] === "npx" || args[0] === "n") {
     const tool = args[0] === "n" ? "npm" : args[0];
@@ -1243,6 +1270,11 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
 main();
 // testingx
 // git push --set-upstream origin my-pc
+
+
+
+
+
 
 
 
