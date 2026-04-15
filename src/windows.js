@@ -483,31 +483,57 @@ function runXamppStart() {
     });
 }
 
-function runXamppStop() {
+function execAsync(commandLine, options = {}) {
+    return new Promise(resolve => {
+        exec(commandLine, options, (error, stdout, stderr) => {
+            resolve({ error, stdout: stdout || "", stderr: stderr || "" });
+        });
+    });
+}
+
+async function runXamppStop(options = {}) {
+    const { strict = false, killDevProcesses = true } = options;
+
     if (process.platform !== "win32") {
         console.log(chalk.red("❌ This command is only available on Windows"));
         process.exit(1);
     }
 
     const commandLine = buildXamppCommand("xampp_stop.exe");
-    exec(commandLine, { windowsHide: false }, error => {
-        if (error) {
-            console.log(chalk.yellow("⚠️ XAMPP stop command failed or XAMPP is already stopped."));
-            console.log(chalk.yellow(error.message));
-        } else {
-            console.log(chalk.green("✅ Stop XAMPP"));
-        }
+    const stopResult = await execAsync(commandLine, { windowsHide: false });
 
-        const cleanupCommand = "cmd /c taskkill /F /IM httpd.exe /IM mysqld.exe /IM php.exe /IM xampp-control.exe /IM git.exe /IM node.exe /IM code.exe";
-        exec(cleanupCommand, { windowsHide: false }, cleanupError => {
-            if (cleanupError) {
-                console.log(chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."));
-                return;
-            }
+    if (stopResult.error) {
+        console.log(chalk.yellow("⚠️ XAMPP stop command failed or XAMPP is already stopped."));
+        console.log(chalk.yellow(stopResult.error.message));
+    } else {
+        console.log(chalk.green("✅ Stop XAMPP"));
+    }
 
-            console.log(chalk.green("✅ Forced cleanup for httpd/mysqld/php/xampp-control/git/node/code"));
-        });
-    });
+    const cleanupImages = ["httpd.exe", "mysqld.exe", "php.exe", "xampp-control.exe"];
+    if (killDevProcesses) { cleanupImages.push("git.exe", "node.exe", "code.exe"); }
+    const cleanupCommand = `cmd /c taskkill /F ${cleanupImages.map(name => `/IM ${name}`).join(" ")}`;
+    const cleanupResult = await execAsync(cleanupCommand, { windowsHide: false });
+
+    if (cleanupResult.error) {
+        console.log(chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."));
+    } else {
+        console.log(chalk.green("✅ Forced cleanup for XAMPP processes"));
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const apacheRunning = await isWindowsProcessRunning("httpd.exe");
+    const mysqlRunning = await isWindowsProcessRunning("mysqld.exe");
+
+    if (strict && (apacheRunning || mysqlRunning)) {
+        console.log(chalk.red("❌ XAMPP services still appear to be running"));
+        console.log(
+            chalk.yellow(
+                `Still running: ${[apacheRunning && "httpd.exe", mysqlRunning && "mysqld.exe"].filter(Boolean).join(", ")}`
+            )
+        );
+        throw new Error("XAMPP stop verification failed");
+    }
 }
 
 module.exports = {

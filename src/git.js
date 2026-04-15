@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
 const chalk = require("chalk");
+const os = require("os");
 const {
   askFirstMenuAction,
   askCommitMessage,
@@ -62,6 +63,18 @@ function setGlobalGitConfigValue(key, value) {
   execSync(`git config --global ${key} "${safeValue}"`, { stdio: "ignore" });
 }
 
+function isInsideGitRepo() {
+  try {
+    const out = execSync("git rev-parse --is-inside-work-tree", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).trim();
+    return out === "true";
+  } catch {
+    return false;
+  }
+}
+
 function parseCredentialTarget(inputRaw) {
   const input = String(inputRaw || "").trim();
   if (!input) {
@@ -77,7 +90,10 @@ function parseCredentialTarget(inputRaw) {
       if (!host) {
         return null;
       }
-      return { protocol: protocol || "https", host };
+      const username = url.username ? decodeURIComponent(url.username) : "";
+      const pathFromUrl = url.pathname ? String(url.pathname).replace(/^\/+/, "") : "";
+      const pathValue = pathFromUrl && pathFromUrl !== "/" ? pathFromUrl : "";
+      return { protocol: protocol || "https", host, username, path: pathValue };
     } catch {
       return null;
     }
@@ -86,18 +102,18 @@ function parseCredentialTarget(inputRaw) {
   // SCP-like SSH: git@host:owner/repo.git
   const scpMatch = input.match(/^git@([^:]+):(.+)$/);
   if (scpMatch) {
-    return { protocol: "https", host: scpMatch[1] };
+    return { protocol: "https", host: scpMatch[1], username: "", path: scpMatch[2] };
   }
 
   // ssh://git@host/owner/repo.git
   const sshMatch = input.match(/^ssh:\/\/git@([^/]+)\/(.+)$/);
   if (sshMatch) {
-    return { protocol: "https", host: sshMatch[1] };
+    return { protocol: "https", host: sshMatch[1], username: "", path: sshMatch[2] };
   }
 
   // Hostname only
   if (/^[a-z0-9.-]+$/i.test(input)) {
-    return { protocol: "https", host: input };
+    return { protocol: "https", host: input, username: "", path: "" };
   }
 
   return null;
@@ -106,17 +122,543 @@ function parseCredentialTarget(inputRaw) {
 function rejectGitCredential(target) {
   const protocol = String(target?.protocol || "https").trim() || "https";
   const host = String(target?.host || "").trim();
+  const username = String(target?.username || "").trim();
+  const pathValue = String(target?.path || "").trim();
   if (!host) {
     throw new Error("Missing host for credential reject");
   }
 
   // Ask git to remove stored creds for this host via the configured credential helper.
   // https://git-scm.com/docs/git-credential
-  const input = `protocol=${protocol}\nhost=${host}\n\n`;
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) {
+    parts.push(`path=${pathValue}`);
+  }
+  if (username) {
+    parts.push(`username=${username}`);
+  }
+  const input = `${parts.join("\n")}\n\n`;
   execSync("git credential reject", {
     input,
     stdio: ["pipe", "ignore", "ignore"],
   });
+}
+
+function tryGetStoredCredentialUsername(target) {
+  const protocol = String(target?.protocol || "https").trim() || "https";
+  const host = String(target?.host || "").trim();
+  const pathValue = String(target?.path || "").trim();
+  if (!host) {
+    return "";
+  }
+
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) {
+    parts.push(`path=${pathValue}`);
+  }
+  const input = `${parts.join("\n")}\n\n`;
+
+  try {
+    const output = execSync("git credential fill", {
+      input,
+      stdio: ["pipe", "pipe", "ignore"],
+      encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+
+    const parsed = parseGitCredentialFillOutput(output);
+    // Only trust username when a secret is present; otherwise it may come from the URL.
+    if (!parsed.present) {
+      return "";
+    }
+    return parsed.username || "";
+  } catch {
+    return "";
+  }
+}
+
+function parseGitCredentialFillOutput(outputRaw) {
+  const lines = String(outputRaw || "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const findValue = (prefix) => {
+    const line = lines.find((l) => l.toLowerCase().startsWith(prefix));
+    return line ? line.slice(prefix.length).trim() : "";
+  };
+
+  const username = findValue("username=");
+  const password = findValue("password=");
+  const credential = findValue("credential=");
+
+  // Consider a credential "present" only if a secret is returned.
+  const present = Boolean(password || credential);
+  return { present, username, password, credential };
+}
+
+function deleteMacKeychainInternetPassword(options = {}) {
+  if (process.platform !== "darwin") {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const host = String(options?.host || "").trim();
+  const username = String(options?.username || "").trim();
+  const protocol = String(options?.protocol || "").trim().toLowerCase();
+  if (!host) {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  // `security delete-internet-password` can fail to match unless we include the exact account/protocol.
+  // So: find one matching item, delete it, repeat until none remain.
+  const protocolHints = [];
+  if (protocol === "https") protocolHints.push("htps");
+  if (protocol === "http") protocolHints.push("http");
+  protocolHints.push("htps", "http", "");
+
+  let attempted = 0;
+  let deleted = 0;
+
+  for (const hint of protocolHints) {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const findArgs = ["find-internet-password", "-s", host];
+      if (username) {
+        findArgs.push("-a", username);
+      }
+      if (hint) {
+        findArgs.push("-r", hint);
+      }
+
+      attempted += 1;
+      let foundOutput = "";
+      try {
+        foundOutput = execSync(
+          `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
+          { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
+        );
+      } catch (error) {
+        break;
+      }
+
+      const acctMatch = String(foundOutput).match(/"acct"<blob>="([^"]+)"/);
+      const ptclMatch = String(foundOutput).match(/"ptcl"<uint32>="([^"]+)"/);
+      const acct = acctMatch ? acctMatch[1] : username;
+      const ptcl = ptclMatch ? ptclMatch[1] : (hint || "");
+
+      const delArgs = ["delete-internet-password", "-s", host];
+      if (acct) delArgs.push("-a", acct);
+      if (ptcl) delArgs.push("-r", ptcl);
+
+      try {
+        execSync(
+          `security ${delArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
+          { stdio: ["inherit", "ignore", "pipe"] },
+        );
+        deleted += 1;
+      } catch (error) {
+        break;
+      }
+    }
+  }
+
+  return { attempted, deleted };
+}
+
+function deleteMacKeychainGenericPassword(options = {}) {
+  if (process.platform !== "darwin") {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const service = String(options?.service || "").trim();
+  const username = String(options?.username || "").trim();
+  if (!service) {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  // Same idea as internet passwords: find one, delete it, repeat.
+  let attempted = 0;
+  let deleted = 0;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const findArgs = ["find-generic-password", "-s", service];
+    if (username) {
+      findArgs.push("-a", username);
+    }
+
+    attempted += 1;
+    let foundOutput = "";
+    try {
+      foundOutput = execSync(
+        `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
+        { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
+      );
+    } catch (error) {
+      break;
+    }
+
+    const acctMatch = String(foundOutput).match(/"acct"<blob>="([^"]+)"/);
+    const acct = acctMatch ? acctMatch[1] : username;
+
+    const delArgs = ["delete-generic-password", "-s", service];
+    if (acct) delArgs.push("-a", acct);
+
+    try {
+      execSync(
+        `security ${delArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
+        { stdio: ["inherit", "ignore", "pipe"] },
+      );
+      deleted += 1;
+    } catch (error) {
+      break;
+    }
+  }
+
+  return { attempted, deleted };
+}
+
+function deleteMacKeychainCredentialsBestEffort(options = {}) {
+  if (process.platform !== "darwin") {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const host = String(options?.host || "").trim();
+  const protocol = String(options?.protocol || "").trim();
+  if (!host) {
+    return { attempted: 0, deleted: 0 };
+  }
+
+  const usernames = Array.isArray(options?.usernames)
+    ? options.usernames.map((u) => String(u || "").trim()).filter(Boolean)
+    : [];
+
+  const uniqueUsernames = [...new Set(usernames)];
+  let attempted = 0;
+  let deleted = 0;
+
+  // Prefer targeted deletes by username first (safer), then fall back to host-only.
+  for (const user of uniqueUsernames) {
+    const res = deleteMacKeychainInternetPassword({ host, username: user, protocol });
+    attempted += res.attempted;
+    deleted += res.deleted;
+  }
+
+  const resHostOnly = deleteMacKeychainInternetPassword({ host, protocol });
+  attempted += resHostOnly.attempted;
+  deleted += resHostOnly.deleted;
+
+  // Also remove common generic-password items used by GCM / GitHub CLI.
+  const services = [
+    `gh:${host}`,
+    `git:https://${host}`,
+    `git:http://${host}`,
+  ];
+  for (const service of services) {
+    const res = deleteMacKeychainGenericPassword({ service });
+    attempted += res.attempted;
+    deleted += res.deleted;
+    for (const user of uniqueUsernames) {
+      const resUser = deleteMacKeychainGenericPassword({ service, username: user });
+      attempted += resUser.attempted;
+      deleted += resUser.deleted;
+    }
+  }
+
+  return { attempted, deleted };
+}
+
+function isCommandAvailable(command) {
+  const safe = String(command || "").trim();
+  if (!safe) {
+    return false;
+  }
+  try {
+    execSync(`command -v ${safe}`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isSshRemote(remoteUrl) {
+  const raw = String(remoteUrl || "").trim();
+  return /^git@/i.test(raw) || /^ssh:\/\//i.test(raw);
+}
+
+function gitCredentialEraseViaHelper(options = {}) {
+  const helper = String(options?.helper || "").trim();
+  const protocol = String(options?.protocol || "https").trim() || "https";
+  const host = String(options?.host || "").trim();
+  const username = String(options?.username || "").trim();
+  const pathValue = String(options?.path || "").trim();
+  if (!helper || !host) {
+    return false;
+  }
+
+  // `git <helper> ...` resolves to `git-<helper>` on PATH.
+  if (!isCommandAvailable(`git-${helper}`)) {
+    return false;
+  }
+
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) parts.push(`path=${pathValue}`);
+  if (username) parts.push(`username=${username}`);
+  const input = `${parts.join("\n")}\n\n`;
+
+  try {
+    execSync(`git ${helper} erase`, {
+      input,
+      stdio: ["pipe", "ignore", "ignore"],
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getConfiguredCredentialHelpers() {
+  // Includes system/global/local stack; we just want to know what may be active.
+  try {
+    const output = execSync("git config --get-all credential.helper", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const helpers = String(output || "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    return [...new Set(helpers)];
+  } catch {
+    return [];
+  }
+}
+
+function parseStoreHelperFile(helperValue) {
+  const raw = String(helperValue || "").trim();
+  if (!raw) {
+    return null;
+  }
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  if (tokens[0] !== "store") {
+    return null;
+  }
+
+  // Default store file
+  let filePath = path.join(os.homedir(), ".git-credentials");
+
+  for (let i = 1; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === "--file" && tokens[i + 1]) {
+      filePath = tokens[i + 1];
+      i += 1;
+      continue;
+    }
+    const match = token.match(/^--file=(.+)$/);
+    if (match) {
+      filePath = match[1];
+      continue;
+    }
+  }
+
+  if (filePath.startsWith("~" + path.sep) || filePath === "~") {
+    filePath = path.join(os.homedir(), filePath.slice(1));
+  }
+
+  return path.resolve(filePath);
+}
+
+function clearStoreCredentialsForHost(hostname) {
+  const host = String(hostname || "").trim().toLowerCase();
+  if (!host) {
+    return { attempted: 0, removed: 0 };
+  }
+
+  const helpers = getConfiguredCredentialHelpers();
+  const storeFiles = helpers
+    .map(parseStoreHelperFile)
+    .filter(Boolean);
+
+  // If helper isn't configured, still consider default location (some users set it elsewhere,
+  // but this covers the common case).
+  if (storeFiles.length === 0) {
+    storeFiles.push(path.join(os.homedir(), ".git-credentials"));
+  }
+
+  const uniqueFiles = [...new Set(storeFiles)];
+  let attempted = 0;
+  let removed = 0;
+
+  for (const filePath of uniqueFiles) {
+    attempted += 1;
+    try {
+      if (!fs.existsSync(filePath)) {
+        // eslint-disable-next-line no-continue
+        continue;
+      }
+      const content = fs.readFileSync(filePath, "utf8");
+      const lines = content.split("\n");
+      const kept = [];
+      for (const line of lines) {
+        const trimmed = String(line || "").trim();
+        if (!trimmed) {
+          continue;
+        }
+        try {
+          const url = new URL(trimmed);
+          if (String(url.hostname || "").toLowerCase() === host) {
+            removed += 1;
+          } else {
+            kept.push(trimmed);
+          }
+        } catch {
+          // Keep unparseable lines
+          kept.push(trimmed);
+        }
+      }
+      fs.writeFileSync(filePath, kept.join("\n") + (kept.length ? "\n" : ""), "utf8");
+    } catch {
+      // ignore
+    }
+  }
+
+  return { attempted, removed };
+}
+
+function checkCredentialStillPresent(target) {
+  const protocol = String(target?.protocol || "https").trim() || "https";
+  const host = String(target?.host || "").trim();
+  const pathValue = String(target?.path || "").trim();
+  if (!host) {
+    return { present: false, username: "" };
+  }
+
+  const parts = [`protocol=${protocol}`, `host=${host}`];
+  if (pathValue) parts.push(`path=${pathValue}`);
+  const input = `${parts.join("\n")}\n\n`;
+
+  try {
+    const output = execSync("git credential fill", {
+      input,
+      stdio: ["pipe", "pipe", "ignore"],
+      encoding: "utf8",
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+    });
+    const parsed = parseGitCredentialFillOutput(output);
+    return { present: parsed.present, username: parsed.username || "" };
+  } catch {
+    return { present: false, username: "" };
+  }
+}
+
+function tryLogoutGh(host) {
+  if (!host || !isCommandAvailable("gh")) {
+    return false;
+  }
+  try {
+    execSync(`gh auth logout -h "${String(host).replace(/"/g, '\\"')}" --yes`, {
+      stdio: "inherit",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function tryClearSshAgent() {
+  if (!isCommandAvailable("ssh-add")) {
+    return false;
+  }
+  if (!process.env.SSH_AUTH_SOCK) {
+    return false;
+  }
+  try {
+    execSync("ssh-add -D", { stdio: "inherit" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function rejectGitCredentialBestEffort(options = {}) {
+  const { hostTarget, originTarget } = options;
+  const base = hostTarget && hostTarget.host ? hostTarget : null;
+  if (!base) {
+    throw new Error("Missing host target");
+  }
+
+  const discoverUsername = /^(1|true|yes)$/i.test(
+    String(process.env.QME_DISCOVER_CREDENTIAL_USERNAME || "").trim(),
+  );
+
+  const protocol = String(base.protocol || "https").trim() || "https";
+  const host = String(base.host || "").trim();
+  const providedUsername = String(base.username || "").trim();
+  const providedPath = String(base.path || "").trim();
+
+  const originPath = String(originTarget?.path || "").trim();
+  const originUsername = String(originTarget?.username || "").trim();
+
+  // NOTE: `git credential fill` can trigger macOS Keychain "login required" prompts.
+  // Keep it opt-in via env var.
+  const discoveredHostUsername = discoverUsername
+    ? tryGetStoredCredentialUsername({ protocol, host })
+    : "";
+  const discoveredOriginUsername =
+    discoverUsername && originPath && originTarget && originTarget.host === host
+      ? tryGetStoredCredentialUsername({ protocol, host, path: originPath })
+      : "";
+
+  const candidates = [];
+  const add = (t) => {
+    if (!t || !t.host) {
+      return;
+    }
+    const key = [
+      String(t.protocol || "https"),
+      String(t.host || ""),
+      String(t.path || ""),
+      String(t.username || ""),
+    ].join("|");
+    if (!candidates.some((c) => c.__key === key)) {
+      candidates.push({ ...t, __key: key });
+    }
+  };
+
+  // Broad → specific.
+  add({ protocol, host });
+  if (originPath) add({ protocol, host, path: originPath });
+  if (providedPath) add({ protocol, host, path: providedPath });
+  if (discoveredHostUsername) add({ protocol, host, username: discoveredHostUsername });
+  if (originUsername) add({ protocol, host, username: originUsername });
+  if (providedUsername) add({ protocol, host, username: providedUsername });
+  if (originPath && discoveredOriginUsername)
+    add({ protocol, host, path: originPath, username: discoveredOriginUsername });
+  if (originPath && discoveredHostUsername)
+    add({ protocol, host, path: originPath, username: discoveredHostUsername });
+  if (providedPath && discoveredHostUsername)
+    add({ protocol, host, path: providedPath, username: discoveredHostUsername });
+
+  let attempted = 0;
+  let anyOk = false;
+  for (const candidate of candidates) {
+    attempted += 1;
+    try {
+      // eslint-disable-next-line no-unused-vars
+      const { __key, ...clean } = candidate;
+      rejectGitCredential(clean);
+      anyOk = true;
+    } catch {
+      // keep going
+    }
+  }
+
+  return {
+    attempted,
+    anyOk,
+    discoveredHostUsername,
+    discoveredOriginUsername,
+  };
 }
 function normalizeRepoToHttpUrl(repoUrl) {
   const input = String(repoUrl || "").trim();
@@ -684,7 +1226,7 @@ function commitChanges(message) {
     return false;
   }
 
-  const finalMessage = withTimestampPrefix(message);
+  const finalMessage = withoutTimestampPrefix(message);
   execSync("git add -A", { stdio: "ignore" });
   try {
     execSync(`git commit -m "${finalMessage.replace(/"/g, '\\"')}"`, {
@@ -765,27 +1307,12 @@ function formatGitError(error) {
   return line || "unknown git error";
 }
 
-function withTimestampPrefix(message) {
+function withoutTimestampPrefix(message) {
   const text = String(message || "").trim();
   const existingPrefixPattern =
     /^@?\[[A-Za-z]{3} \d{4}-\d{2}-\d{2} \d{2}:\d{2}\]\s*/;
-  if (existingPrefixPattern.test(text)) {
-    return text;
-  }
-
-  const now = new Date();
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const day = dayNames[now.getDay()];
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const date = String(now.getDate()).padStart(2, "0");
-  const hour24 = now.getHours();
-  const hour12 = hour24 % 12 || 12;
-  const hours = String(hour12).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const stamp = `[${day} ${year}-${month}-${date} ${hours}:${minutes}]`;
-
-  return text ? `${stamp} ${text}` : stamp;
+  const stripped = text.replace(existingPrefixPattern, "").trim();
+  return stripped || text;
 }
 
 /* ---------- PULL | SKIP ---------- */
@@ -810,12 +1337,6 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
     console.log(chalk.green("✅ Pull completed"));
   } catch (error) {
     console.log(chalk.red(`❌ Pull failed: ${formatGitError(error)}`));
-    console.log(chalk.yellow(`ℹ️ If this is an unrelated history case, run:`));
-    console.log(
-      chalk.yellow(
-        `   git pull ${REMOTE} ${remoteBranch} --allow-unrelated-histories --no-edit`,
-      ),
-    );
     return;
   }
 
@@ -1003,44 +1524,49 @@ async function runGitUserRemove() {
 async function runGitUserSwitch() {
   let savedUsers = getGitUsers();
   let selectedUser = null;
+  const inRepo = isInsideGitRepo();
+  const debugCreds = /^(1|true|yes)$/i.test(
+    String(process.env.QME_DEBUG_CREDENTIALS || "").trim(),
+  );
+  const keychainDeleteEnabled = /^(1|true|yes)$/i.test(
+    String(process.env.QME_KEYCHAIN_DELETE || "").trim(),
+  );
+	  const ghLogoutEnabled = /^(1|true|yes)$/i.test(
+	    String(process.env.QME_GH_LOGOUT || "").trim(),
+	  );
 
-  while (savedUsers.length > 0) {
-    console.log();
-    console.log(chalk.blueBright("👥 Saved git users:"));
-    console.log(chalk.green("  0) Enter manually"));
-    console.log(chalk.yellow("  r) Remove a saved user"));
-    savedUsers.forEach((user, index) => {
-      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
-    });
+	  while (savedUsers.length > 0) {
+	    console.log();
+	    console.log(chalk.blueBright("👥 Saved git users:"));
+	    console.log(chalk.yellow("  r) Remove a saved user"));
+	    savedUsers.forEach((user, index) => {
+	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+	    });
 
-    const answerRaw = await askQuestion(
-      chalk.yellow(`👉 Choose user (0-${savedUsers.length}) (r = remove, Enter = cancel): `),
-    );
-    const answer = String(answerRaw || "").trim().toLowerCase();
+	    const answerRaw = await askQuestion(
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (r = remove, Enter = cancel): `),
+	    );
+	    const answer = String(answerRaw || "").trim().toLowerCase();
 
-    if (!answer) {
-      console.log(chalk.yellow("ℹ️ Cancelled."));
-      return;
-    }
-    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
-      await runGitUserRemove();
-      savedUsers = getGitUsers();
-      continue;
-    }
+	    if (!answer) {
+	      console.log(chalk.yellow("ℹ️ Cancelled."));
+	      return;
+	    }
+	    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
+	      await runGitUserRemove();
+	      savedUsers = getGitUsers();
+	      continue;
+	    }
 
-    const selectedIndex = Number.parseInt(answer, 10);
-    if (Number.isInteger(selectedIndex) && selectedIndex === 0) {
-      break;
-    }
+	    const selectedIndex = Number.parseInt(answer, 10);
+	    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
+	      selectedUser = savedUsers[selectedIndex - 1];
+	      console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
+	      break;
+	    }
 
-    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
-      selectedUser = savedUsers[selectedIndex - 1];
-      console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
-      break;
-    }
-
-    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
-  }
+	    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
+	  }
 
   const currentGlobal = getGitUser("--global") || { name: "", email: "" };
 
@@ -1099,48 +1625,265 @@ async function runGitUserSwitch() {
         console.log(chalk.green("✅ Set credential.helper = manager-core"));
       }
     }
+    if (process.platform === "darwin" && !helper) {
+      const shouldSet = await askYesNo(
+        chalk.yellow("🔐 credential.helper is not set. Set it to osxkeychain (macOS Keychain)?"),
+        true,
+      );
+      if (shouldSet) {
+        setGlobalGitConfigValue("credential.helper", "osxkeychain");
+        console.log(chalk.green("✅ Set credential.helper = osxkeychain"));
+      }
+    }
+    if (
+      process.platform === "darwin" &&
+      helper &&
+      /manager/i.test(helper) &&
+      !/osxkeychain/i.test(helper)
+    ) {
+      const shouldSwitch = await askYesNo(
+        chalk.yellow(
+          `🔐 credential.helper is set to "${helper}". Switch to osxkeychain (macOS Keychain)?`,
+        ),
+        false,
+      );
+      if (shouldSwitch) {
+        setGlobalGitConfigValue("credential.helper", "osxkeychain");
+        console.log(chalk.green("✅ Set credential.helper = osxkeychain"));
+      }
+    }
   } catch {
     // Non-fatal
   }
 
-  const shouldClear = await askYesNo(
-    chalk.yellow("🔐 Clear saved credentials for a host (so Git prompts login again)?"),
+  let defaultHost = "";
+  let defaultOriginTarget = null;
+  let originUrlRaw = "";
+  if (inRepo) {
+    try {
+      const originUrl = getProjectRepoUrl();
+      originUrlRaw = originUrl ? String(originUrl).trim() : "";
+      const httpUrl = normalizeRepoToHttpUrl(originUrl);
+      if (httpUrl) {
+        defaultOriginTarget = parseCredentialTarget(httpUrl);
+        defaultHost = new URL(httpUrl).hostname;
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // If the remote URL includes a username (e.g. https://USER@github.com/org/repo.git),
+  // Git can keep showing that user even after credentials are cleared.
+  if (inRepo && originUrlRaw && originUrlRaw.includes("://")) {
+    try {
+      const url = new URL(originUrlRaw);
+      if (url.username) {
+        const embeddedUser = url.username;
+        const shouldFixRemote = await askYesNo(
+          chalk.yellow(
+            `🔧 origin URL has embedded username "${embeddedUser}". Remove it from origin (recommended)?`,
+          ),
+          true,
+        );
+        if (shouldFixRemote) {
+          url.username = "";
+          url.password = "";
+          const cleaned = url.toString().replace(/\/$/, "");
+          execSync(`git remote set-url origin "${String(cleaned).replace(/"/g, '\\"')}"`, {
+            stdio: "ignore",
+          });
+          originUrlRaw = cleaned;
+          const httpUrl = normalizeRepoToHttpUrl(cleaned);
+          if (httpUrl) {
+            defaultOriginTarget = parseCredentialTarget(httpUrl);
+            defaultHost = new URL(httpUrl).hostname;
+          }
+          console.log(chalk.green("✅ Updated origin URL (removed embedded username)"));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // After switching users, clear the current credential "session" so the next push/pull
+  // prompts for the correct account.
+  const shouldRemoveCreds = await askYesNo(
+    chalk.yellow("🔐 Remove saved git credentials?"),
     true,
   );
-  if (!shouldClear) {
+  if (!shouldRemoveCreds) {
     return;
   }
 
-  let defaultHost = "";
-  try {
-    const originUrl = getProjectRepoUrl();
-    const httpUrl = normalizeRepoToHttpUrl(originUrl);
-    if (httpUrl) {
-      defaultHost = new URL(httpUrl).hostname;
+  let target = null;
+  // Require explicit host when we can't infer a default (not in a repo or no origin).
+  // Allow cancel keywords to exit.
+  while (!target) {
+    const targetRaw = await askQuestion(
+      chalk.yellow(
+        `🌐 Enter remote host${defaultHost ? ` [${defaultHost}]` : ""} (Enter = ${defaultHost ? "default" : "cancel"}): `,
+      ),
+    );
+    const raw = String(targetRaw || "").trim();
+    if (!raw && !defaultHost) {
+      target = null;
+      break;
     }
-  } catch {
-    // ignore
+    if (/^(c|cancel|exit|quit)$/i.test(raw)) {
+      target = null;
+      break;
+    }
+    target = parseCredentialTarget(raw || defaultHost);
+    if (!target) {
+      console.log(chalk.yellow("⚠️ Could not parse host. Try again (example: github.com)"));
+    }
   }
-
-  const targetRaw = await askQuestion(
-    chalk.yellow(
-      `🌐 Enter remote URL or host to clear${defaultHost ? ` [${defaultHost}]` : ""}: `,
-    ),
-  );
-  const target = parseCredentialTarget(targetRaw || defaultHost);
   if (!target) {
-    console.log(chalk.yellow("⚠️ Could not parse host. Skipped clearing credentials."));
+    console.log(chalk.gray("ℹ️ Cancelled clearing saved credentials."));
     return;
   }
 
   try {
-    rejectGitCredential(target);
+    const originTargetToUse =
+      defaultOriginTarget && defaultOriginTarget.host === target.host
+        ? defaultOriginTarget
+        : null;
+    const result = rejectGitCredentialBestEffort({
+      hostTarget: target,
+      originTarget: originTargetToUse,
+    });
+
+    // On macOS, also try deleting Keychain entries directly. Some setups still keep old
+    // Internet Password items even after `git credential reject`.
+    // Additionally, explicitly call common helpers when present.
+    if (process.platform === "darwin") {
+      // Keychain deletion can trigger macOS permission prompts (password/Touch ID).
+      // Keep it opt-in via env var to avoid "login required" popups.
+      if (keychainDeleteEnabled) {
+        const keychainUsernames = [
+          target.username,
+          target.path ? tryGetStoredCredentialUsername({ protocol: target.protocol, host: target.host, path: target.path }) : "",
+          result.discoveredHostUsername,
+          result.discoveredOriginUsername,
+          originTargetToUse?.username,
+        ].filter(Boolean);
+        const keychainResult = deleteMacKeychainCredentialsBestEffort({
+          host: target.host,
+          protocol: target.protocol,
+          usernames: keychainUsernames,
+        });
+        if (debugCreds && keychainResult.deleted > 0) {
+          console.log(chalk.green(`✅ Keychain: removed ${keychainResult.deleted} item(s)`));
+        }
+      }
+
+      // Try helper erases explicitly (works even if credential.helper isn't set correctly).
+      const helperTargets = [
+        { protocol: target.protocol, host: target.host },
+        originTargetToUse ? { protocol: originTargetToUse.protocol, host: originTargetToUse.host, path: originTargetToUse.path } : null,
+        target.path ? { protocol: target.protocol, host: target.host, path: target.path } : null,
+      ].filter(Boolean);
+
+      for (const t of helperTargets) {
+        // eslint-disable-next-line no-continue
+        if (!t) continue;
+        gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t });
+        gitCredentialEraseViaHelper({ helper: "credential-manager", ...t });
+        gitCredentialEraseViaHelper({ helper: "credential-manager-core", ...t });
+        if (t.path) {
+          // Username discovery is opt-in (can trigger Keychain prompts on macOS).
+          if (/^(1|true|yes)$/i.test(String(process.env.QME_DISCOVER_CREDENTIAL_USERNAME || "").trim())) {
+            const u = tryGetStoredCredentialUsername(t);
+            if (u) {
+              gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t, username: u });
+              gitCredentialEraseViaHelper({ helper: "credential-manager", ...t, username: u });
+              gitCredentialEraseViaHelper({ helper: "credential-manager-core", ...t, username: u });
+            }
+          }
+        }
+      }
+    }
+
+    const storeResult = clearStoreCredentialsForHost(target.host);
+    if (debugCreds && storeResult.removed > 0) {
+      console.log(chalk.green(`✅ credential-store: removed ${storeResult.removed} entr${storeResult.removed === 1 ? "y" : "ies"}`));
+    }
+
     console.log(chalk.green(`✅ Cleared saved credentials for ${target.host}`));
-    console.log(chalk.gray("ℹ️ Next git push/pull will ask you to sign in again."));
+    if (debugCreds && !result.anyOk) {
+      console.log(
+        chalk.yellow(
+          "⚠️ Credential helper did not confirm clearing. You may still be signed in via another helper (e.g. GitHub CLI / GCM).",
+        ),
+      );
+    }
+
+    // Extra diagnostics only when explicitly enabled.
+    if (debugCreds) {
+      const checkHost = checkCredentialStillPresent({ protocol: target.protocol, host: target.host });
+      const checkOrigin = originTargetToUse
+        ? checkCredentialStillPresent({
+            protocol: originTargetToUse.protocol,
+            host: originTargetToUse.host,
+            path: originTargetToUse.path,
+          })
+        : { present: false, username: "" };
+      if (checkHost.present || checkOrigin.present) {
+        const u = checkOrigin.username || checkHost.username || "";
+        console.log(chalk.yellow("⚠️ Credentials still appear to be stored for this host."));
+        const helpers = getConfiguredCredentialHelpers();
+        console.log(chalk.gray(`credential.helper: ${helpers.length ? helpers.join(", ") : "(not set)"}`));
+        if (process.platform === "darwin") {
+          console.log(
+            chalk.gray(
+              `Try Keychain delete: security delete-internet-password -s ${target.host}${u ? ` -a ${u}` : ""}`,
+            ),
+          );
+        }
+      }
+    }
   } catch (error) {
     console.log(chalk.red("❌ Failed to clear saved credentials"));
     console.log(chalk.yellow(error.message));
   }
+
+  // Optional: logout GitHub CLI session too (can prompt/revoke depending on setup).
+  const host = target.host;
+  if (ghLogoutEnabled && isCommandAvailable("gh")) {
+    const ok = tryLogoutGh(host);
+    if (debugCreds && ok) {
+      console.log(chalk.green(`✅ GitHub CLI: logged out for ${host}`));
+    }
+  }
+
+  // Optional: clear SSH agent keys (can be destructive).
+  const sshRemote = isSshRemote(originUrlRaw);
+  if (sshRemote) {
+    console.log(
+      chalk.yellow(
+        "⚠️ SSH remote detected. Clearing SSH agent will remove all loaded keys (ssh-add -D).",
+      ),
+    );
+    const shouldClearSsh = await askYesNo(
+      chalk.yellow("🧹 Clear SSH agent keys now?"),
+      false,
+    );
+    if (shouldClearSsh) {
+      const ok = tryClearSshAgent();
+      if (ok) {
+        console.log(chalk.green("✅ Cleared SSH agent keys (ssh-add -D)"));
+      } else {
+        console.log(
+          chalk.gray(
+            "ℹ️ Skipped clearing SSH agent (ssh-add not available, no SSH_AUTH_SOCK, or command failed).",
+          ),
+        );
+      }
+    }
+  }
+
 }
 module.exports = {
   runGitSync,

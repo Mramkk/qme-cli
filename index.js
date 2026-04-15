@@ -26,6 +26,10 @@ const {
   setXamppCurrentVersion,
   clearXamppCurrentVersion,
   getXamppCurrentVersion,
+  getAliases,
+  addOrUpdateAlias,
+  removeAlias,
+  getConfigPath,
 } = require("./src/config.js");
 const { getProjectRepoUrl } = require("./src/utils.js");
 const { initializeRepo } = require("./src/init.js");
@@ -41,8 +45,9 @@ const {
 } = require("./src/windows");
 const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 const { runTimer } = require("./src/timer");
+const { runOpen } = require("./src/open");
+const { fixPemPermissions } = require("./src/pem");
 
-const args = process.argv.slice(2);
 function getCliVersion() {
   try {
     // eslint-disable-next-line import/no-dynamic-require, global-require
@@ -77,8 +82,12 @@ function printHelp(options = {}) {
   // console.log(chalk.green("  qme init [--branch <name>]"));
   // console.log(chalk.green("  qme recent"));
   console.log(chalk.green("  qme git sync"));
+  console.log(chalk.gray("  Alias: qme gsync   (same as: qme git sync)"));
   console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
+  console.log(chalk.green("  qme alias [list|add|remove]"));
+  console.log(chalk.green("  qme open <url>"));
+  console.log(chalk.green("  qme pem -f <path-to-pem>"));
   console.log(
     chalk.green(
       "  qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]",
@@ -623,7 +632,107 @@ function tryOpenInVsCode(targetPath) {
   process.exit(1);
 }
 
+
+const RESERVED_ALIAS_NAMES = new Set([
+  "help",
+  "debug",
+  "alias",
+  "git",
+  "gsync",
+  "config",
+  "timer",
+  "npm",
+  "npx",
+  "n",
+  "pa",
+  "init",
+  "add",
+  "win",
+  "w",
+  "wintask",
+  "taskm",
+  "wl",
+  ".",
+  "recent",
+  "path",
+  "postman",
+  "chrome",
+  "gchat",
+  "hub",
+  "mail",
+  "notepad",
+  "note",
+  "notes",
+  "quit",
+  "xstart",
+  "xstop",
+  "xswitch",
+  "xampp",
+  "--help",
+  "-h",
+  "--version",
+  "-v",
+]);
+
+function formatAliasTokens(tokens) {
+  return tokens
+    .map((t) => {
+      const token = String(t || "");
+      return /\s/.test(token) ? JSON.stringify(token) : token;
+    })
+    .join(" ")
+    .trim();
+}
+function isAliasSeparator(token) {
+  const value = String(token || "").trim();
+  // Accept various dash characters: -, ‐, ‑, ‒, –, —, ―, −
+  return /^[\-\u2010\u2011\u2012\u2013\u2014\u2015\u2212]{2,}$/.test(value);
+}
+
+function expandAliases(inputArgs) {
+  let args = Array.isArray(inputArgs) ? [...inputArgs] : [];
+  if (!args.length) {
+    return args;
+  }
+
+  let aliases = {};
+  try {
+    aliases = getAliases();
+  } catch {
+    aliases = {};
+  }
+
+  const seen = new Set();
+  for (let depth = 0; depth < 5; depth += 1) {
+    const name = args[0];
+    if (!name || RESERVED_ALIAS_NAMES.has(name) || seen.has(name)) {
+      break;
+    }
+
+    const replacement = aliases[name];
+    if (!Array.isArray(replacement) || replacement.length === 0) {
+      break;
+    }
+
+    seen.add(name);
+    args = [...replacement, ...args.slice(1)];
+  }
+
+  return args;
+}
+
 async function main() {
+  const rawArgs = process.argv.slice(2);
+  let args = [...rawArgs];
+  args = expandAliases(args);
+  if (rawArgs[0] === "debug" && rawArgs[1] === "argv") {
+    console.log(chalk.blueBright("Raw argv:"));
+    console.log(JSON.stringify(rawArgs, null, 2));
+    console.log();
+    console.log(chalk.blueBright("Expanded argv:"));
+    console.log(JSON.stringify(args, null, 2));
+    return;
+  }
   if (
     args.length === 0 ||
     args[0] === "help" ||
@@ -639,6 +748,125 @@ async function main() {
     console.log(version || "");
     return;
   }
+  
+  if (args[0] === "alias") {
+    const sub = args[1] || "list";
+
+    if (sub === "list" || sub === "ls") {
+      const aliases = getAliases();
+      const names = Object.keys(aliases).sort((a, b) => a.localeCompare(b));
+
+      if (names.length === 0) {
+        console.log(chalk.yellow("ℹ️ No aliases configured"));
+        console.log(chalk.gray(`Config: ${getConfigPath()}`));
+        return;
+      }
+
+      console.log(chalk.blueBright("Aliases:"));
+      for (const name of names) {
+        console.log(
+          chalk.green(`  ${name}`),
+          chalk.gray("->"),
+          chalk.cyan(formatAliasTokens(aliases[name])),
+        );
+      }
+      console.log();
+      console.log(chalk.gray(`Config: ${getConfigPath()}`));
+      return;
+    }
+    if (sub === "add") {
+      const name = args[2];
+      const sepIndex = args.findIndex(isAliasSeparator);
+      const tokens = sepIndex >= 0 ? args.slice(sepIndex + 1) : [];
+
+      if (!name || sepIndex < 0 || sepIndex < 3 || tokens.length === 0) {
+        console.log(chalk.red("❌ Usage: qme alias add <name> -- <command...>"));
+        console.log(
+          chalk.gray(
+            "Tip: if you're running qme via npm scripts, you may need: npm run <script> -- --",
+          ),
+        );
+        process.exit(1);
+      }
+
+      if (RESERVED_ALIAS_NAMES.has(name)) {
+        console.log(chalk.red(`❌ Cannot use reserved alias name: ${name}`));
+        process.exit(1);
+      }
+
+      const ok = addOrUpdateAlias(name, tokens);
+      if (!ok) {
+        console.log(chalk.red("❌ Invalid alias name or command"));
+        console.log(
+          chalk.yellow("Alias name must match: [a-zA-Z0-9][a-zA-Z0-9:_-]*"),
+        );
+        process.exit(1);
+      }
+
+      console.log(chalk.green(`✅ Alias saved: ${name}`));
+      console.log(chalk.gray("   ->"), chalk.cyan(formatAliasTokens(tokens)));
+      console.log(chalk.gray(`📄 Config updated: ${getConfigPath()}`));
+      return;
+    }
+if (sub === "remove" || sub === "rm" || sub === "del") {
+      const name = args[2];
+      if (!name) {
+        console.log(chalk.red("❌ Usage: qme alias remove <name>"));
+        process.exit(1);
+      }
+
+      const ok = removeAlias(name);
+      if (!ok) {
+        console.log(chalk.yellow(`ℹ️ Alias not found: ${name}`));
+        process.exit(1);
+      }
+
+      console.log(chalk.green(`✅ Alias removed: ${name}`));
+      console.log(chalk.gray(`📄 Config updated: ${getConfigPath()}`));
+      return;
+    }
+
+    console.log(chalk.red("❌ Unknown alias subcommand"));
+    console.log(chalk.yellow("Usage: qme alias [list|add|remove]"));
+    process.exit(1);
+  }
+
+
+  if (args[0] === "open") {
+    const url = args[1];
+    if (!url) {
+      console.log(chalk.red("❌ Usage: qme open <url>"));
+      process.exit(1);
+    }
+    runOpen(url);
+    return;
+  }
+  if (args[0] === "pem") {
+    if (process.platform !== "win32") {
+      console.log(chalk.red("❌ This command is only available on Windows"));
+      process.exit(1);
+    }
+
+    let rawTarget = getOptionValue(args, ["--file", "-f"]);
+    if (!rawTarget && args[1] && !String(args[1]).startsWith("-")) {
+      rawTarget = args[1];
+    }
+
+    if (!rawTarget) {
+      rawTarget = await askQuestion(chalk.magenta("🔑 Enter PEM file path: "));
+    }
+
+    const resolvedPath = parseFileUriToPath(rawTarget);
+    if (!resolvedPath) {
+      console.log(chalk.red("❌ Invalid PEM file path"));
+      console.log(chalk.yellow('Usage: qme pem -f "C:\\path\\to\\file.pem"'));
+      process.exit(1);
+    }
+
+    fixPemPermissions(resolvedPath);
+    return;
+  }
+
   if (args[0] === "npm" || args[0] === "npx" || args[0] === "n") {
     const tool = args[0] === "n" ? "npm" : args[0];
     runNodeToolCommand(tool, args.slice(1));
@@ -668,6 +896,11 @@ async function main() {
       );
       process.exit(1);
     }
+  }
+
+  if (args[0] === "gsync") {
+    await runGitSync();
+    return;
   }
 
   if (args[0] === "git" && args[1] === "sync") {
@@ -955,6 +1188,18 @@ async function main() {
   }
 
   if (args[0] === "quit") {
+    if (process.platform !== "win32") {
+      console.log(chalk.red("❌ This command is only available on Windows"));
+      process.exit(1);
+    }
+
+    try {
+      // Stop XAMPP before shutting down the machine.
+      await runXamppStop({ strict: true, killDevProcesses: false });
+    } catch (error) {
+      process.exit(1);
+    }
+
     runWindowsCommand("quit");
     return;
   }
@@ -1025,3 +1270,22 @@ async function main() {
 main();
 // testingx
 // git push --set-upstream origin my-pc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
