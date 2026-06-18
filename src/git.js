@@ -790,7 +790,8 @@ function withTimestampPrefix(message) {
   const minutes = String(now.getMinutes()).padStart(2, "0");
   const stamp = `[${day} ${year}-${month}-${date} ${hours}:${minutes}]`;
 
-  return text ? `${stamp} ${text}` : stamp;
+  // return text ? `${stamp} ${text}` : stamp;
+  return text;
 }
 
 /* ---------- PULL | SKIP ---------- */
