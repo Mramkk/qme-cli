@@ -13,16 +13,35 @@ function getGitUser(scope) {
 }
 
 function getProjectRepoUrl() {
+    // Prefer git itself (works from any subdirectory and respects worktrees).
     try {
-        const config = fs.readFileSync(
-            path.join(process.cwd(), ".git", "config"),
-            "utf8"
-        );
+        const url = execSync("git remote get-url origin", {
+            encoding: "utf8",
+            stdio: ["ignore", "pipe", "pipe"]
+        }).trim();
+        return url || null;
+    } catch {
+        // fall through
+    }
 
-        const match = config.match(
-            /\[remote "origin"\][\s\S]*?url\s*=\s*(.+)/
-        );
+    // Fallback: parse .git/config if present.
+    try {
+        let gitDir = "";
+        try {
+            gitDir = execSync("git rev-parse --git-dir", {
+                encoding: "utf8",
+                stdio: ["ignore", "pipe", "pipe"]
+            }).trim();
+        } catch {
+            gitDir = path.join(process.cwd(), ".git");
+        }
 
+        const configPath = path.isAbsolute(gitDir)
+            ? path.join(gitDir, "config")
+            : path.join(process.cwd(), gitDir, "config");
+
+        const config = fs.readFileSync(configPath, "utf8");
+        const match = config.match(/\[remote "origin"\][\s\S]*?url\s*=\s*(.+)/);
         return match ? match[1].trim() : null;
     } catch {
         return null;
