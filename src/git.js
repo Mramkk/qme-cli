@@ -999,7 +999,7 @@ function getCheckoutBranchOptions(currentBranch) {
   const options = [];
 
   try {
-    const localOutput = execSync("git branch --format=%(refname:short)", {
+    const localOutput = execSync("git for-each-ref --sort=-committerdate --format=%(refname:short)%09%(committerdate:unix) refs/heads", {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     });
@@ -1007,49 +1007,28 @@ function getCheckoutBranchOptions(currentBranch) {
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .filter((branch) => branch !== currentBranch)
+      .map((line) => {
+        const [branch, dateRaw] = line.split("\t");
+        return {
+          name: String(branch || "").trim(),
+          sortDate: Number.parseInt(dateRaw, 10) || 0,
+        };
+      })
+      .filter((branch) => branch.name && branch.name !== currentBranch)
       .forEach((branch) => {
-        options.push({ name: branch, label: branch, type: "local" });
+        options.push({
+          name: branch.name,
+          label: branch.name,
+          type: "local",
+          sortDate: branch.sortDate,
+        });
       });
   } catch {
     // Continue with remote branches if local branch listing fails.
   }
 
-  try {
-    const remoteOutput = execSync("git branch -r --format=%(refname:short)", {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    remoteOutput
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((branch) => !branch.endsWith("/HEAD"))
-      .forEach((remoteBranch) => {
-        const localName = remoteBranch.replace(new RegExp(`^${REMOTE}/`), "");
-        if (!localName || localName === currentBranch) {
-          return;
-        }
-
-        const hasLocalOption = options.some(
-          (option) => option.type === "local" && option.name === localName,
-        );
-        if (hasLocalOption) {
-          return;
-        }
-
-        options.push({
-          name: localName,
-          label: `${localName} (${remoteBranch})`,
-          type: "remote",
-          remoteName: remoteBranch,
-        });
-      });
-  } catch {
-    // No remote branches available.
-  }
-
   return uniqueBranchOptions(options).sort((a, b) =>
+    (b.sortDate - a.sortDate) ||
     a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
   );
 }
@@ -1082,7 +1061,7 @@ async function checkoutBranchFromMenu(currentBranch) {
   const branches = getCheckoutBranchOptions(currentBranch);
 
   if (branches.length === 0) {
-    console.log(chalk.yellow("ℹ️ No other local or remote branches found"));
+    console.log(chalk.yellow("ℹ️ No other local branches found"));
     return;
   }
 
@@ -1092,9 +1071,7 @@ async function checkoutBranchFromMenu(currentBranch) {
     return;
   }
 
-  const args = selected.type === "remote"
-    ? ["checkout", "-t", selected.remoteName]
-    : ["checkout", selected.name];
+  const args = ["checkout", selected.name];
 
   const result = spawnSync("git", args, { stdio: "inherit", shell: false });
   if (result.error) {
