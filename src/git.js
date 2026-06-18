@@ -1,4 +1,4 @@
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -965,6 +965,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "checkout") {
+    await checkoutBranchFromMenu(currentBranch);
+    return;
+  }
+
   if (action === "commit") {
     const message = await askCommitMessage();
     const didCommit = commitChanges(message);
@@ -972,6 +977,138 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
       await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
     }
   }
+}
+
+function uniqueBranchOptions(options) {
+  const seen = new Set();
+  const result = [];
+
+  for (const option of options) {
+    const key = `${option.type}:${option.name}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(option);
+  }
+
+  return result;
+}
+
+function getCheckoutBranchOptions(currentBranch) {
+  const options = [];
+
+  try {
+    const localOutput = execSync("git branch --format=%(refname:short)", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    localOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((branch) => branch !== currentBranch)
+      .forEach((branch) => {
+        options.push({ name: branch, label: branch, type: "local" });
+      });
+  } catch {
+    // Continue with remote branches if local branch listing fails.
+  }
+
+  try {
+    const remoteOutput = execSync("git branch -r --format=%(refname:short)", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    remoteOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((branch) => !branch.endsWith("/HEAD"))
+      .forEach((remoteBranch) => {
+        const localName = remoteBranch.replace(new RegExp(`^${REMOTE}/`), "");
+        if (!localName || localName === currentBranch) {
+          return;
+        }
+
+        const hasLocalOption = options.some(
+          (option) => option.type === "local" && option.name === localName,
+        );
+        if (hasLocalOption) {
+          return;
+        }
+
+        options.push({
+          name: localName,
+          label: `${localName} (${remoteBranch})`,
+          type: "remote",
+          remoteName: remoteBranch,
+        });
+      });
+  } catch {
+    // No remote branches available.
+  }
+
+  return uniqueBranchOptions(options).sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+async function askCheckoutBranchSelection(branches) {
+  if (branches.length === 0) {
+    return null;
+  }
+
+  console.log();
+  console.log(chalk.blue("🌿 Select branch to checkout:"));
+  branches.forEach((branch, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${branch.label}`));
+  });
+  console.log(chalk.green(`  ${branches.length + 1}) Abort`));
+
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose an option (1/${branches.length + 1}) [default: abort]: `),
+  );
+  const selected = Number.parseInt(answer, 10);
+
+  if (!Number.isInteger(selected) || selected < 1 || selected > branches.length) {
+    return null;
+  }
+
+  return branches[selected - 1];
+}
+
+async function checkoutBranchFromMenu(currentBranch) {
+  const branches = getCheckoutBranchOptions(currentBranch);
+
+  if (branches.length === 0) {
+    console.log(chalk.yellow("ℹ️ No other local or remote branches found"));
+    return;
+  }
+
+  const selected = await askCheckoutBranchSelection(branches);
+  if (!selected) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Checkout aborted"));
+    return;
+  }
+
+  const args = selected.type === "remote"
+    ? ["checkout", "-t", selected.remoteName]
+    : ["checkout", selected.name];
+
+  const result = spawnSync("git", args, { stdio: "inherit", shell: false });
+  if (result.error) {
+    console.log(chalk.red("❌ Checkout failed"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    console.log(chalk.red("❌ Checkout failed"));
+    process.exit(result.status);
+  }
+
+  console.log(chalk.green(`✅ Checked out branch: ${selected.name}`));
 }
 
 async function runGitReset() {

@@ -51,7 +51,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
 
         if (allowPull) {
             console.log(chalk.green("  0) Pull"));
-            console.log(chalk.green("  1) Stash"));
+            console.log(chalk.green("  1) Checkout branch"));
             console.log(chalk.green("  2) Abort"));
             rl.question(
                 chalk.yellow("👉 Choose an option (0/1/2) [default: 0]: "),
@@ -60,7 +60,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
                     const value = answer.trim();
 
                     if (!value || value === "0") resolve("pull");
-                    else if (value === "1") resolve("stash");
+                    else if (value === "1") resolve("checkout");
                     else resolve("abort");
                 }
             );
