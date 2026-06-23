@@ -1,4 +1,4 @@
-const { execSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const readline = require("readline");
@@ -965,6 +965,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "checkout") {
+    await checkoutBranchFromMenu(currentBranch);
+    return;
+  }
+
   if (action === "commit") {
     const message = await askCommitMessage();
     const didCommit = commitChanges(message);
@@ -972,6 +977,115 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
       await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
     }
   }
+}
+
+function uniqueBranchOptions(options) {
+  const seen = new Set();
+  const result = [];
+
+  for (const option of options) {
+    const key = `${option.type}:${option.name}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(option);
+  }
+
+  return result;
+}
+
+function getCheckoutBranchOptions(currentBranch) {
+  const options = [];
+
+  try {
+    const localOutput = execSync("git for-each-ref --sort=-committerdate --format=%(refname:short)%09%(committerdate:unix) refs/heads", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    localOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [branch, dateRaw] = line.split("\t");
+        return {
+          name: String(branch || "").trim(),
+          sortDate: Number.parseInt(dateRaw, 10) || 0,
+        };
+      })
+      .filter((branch) => branch.name && branch.name !== currentBranch)
+      .forEach((branch) => {
+        options.push({
+          name: branch.name,
+          label: branch.name,
+          type: "local",
+          sortDate: branch.sortDate,
+        });
+      });
+  } catch {
+    // Continue with remote branches if local branch listing fails.
+  }
+
+  return uniqueBranchOptions(options).sort((a, b) =>
+    (b.sortDate - a.sortDate) ||
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }),
+  );
+}
+
+async function askCheckoutBranchSelection(branches) {
+  if (branches.length === 0) {
+    return null;
+  }
+
+  console.log();
+  console.log(chalk.blue("🌿 Select branch to checkout:"));
+  branches.forEach((branch, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${branch.label}`));
+  });
+  console.log(chalk.green(`  ${branches.length + 1}) Abort`));
+
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose an option (1/${branches.length + 1}) [default: abort]: `),
+  );
+  const selected = Number.parseInt(answer, 10);
+
+  if (!Number.isInteger(selected) || selected < 1 || selected > branches.length) {
+    return null;
+  }
+
+  return branches[selected - 1];
+}
+
+async function checkoutBranchFromMenu(currentBranch) {
+  const branches = getCheckoutBranchOptions(currentBranch);
+
+  if (branches.length === 0) {
+    console.log(chalk.yellow("ℹ️ No other local branches found"));
+    return;
+  }
+
+  const selected = await askCheckoutBranchSelection(branches);
+  if (!selected) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Checkout aborted"));
+    return;
+  }
+
+  const args = ["checkout", selected.name];
+
+  const result = spawnSync("git", args, { stdio: "inherit", shell: false });
+  if (result.error) {
+    console.log(chalk.red("❌ Checkout failed"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    console.log(chalk.red("❌ Checkout failed"));
+    process.exit(result.status);
+  }
+
+  console.log(chalk.green(`✅ Checked out branch: ${selected.name}`));
 }
 
 async function runGitReset() {
@@ -1270,6 +1384,63 @@ function getUpstreamRef(currentBranch) {
   return `${REMOTE}/${currentBranch}`;
 }
 
+function hasConfiguredUpstream(currentBranch) {
+  try {
+    const out = execSync(
+      `git for-each-ref --format="%(upstream:short)" refs/heads/${currentBranch}`,
+      { encoding: "utf8" },
+    ).trim();
+    return Boolean(out);
+  } catch {
+    return false;
+  }
+}
+
+function isMissingUpstreamError(error) {
+  const text = String(
+    error?.stderr || error?.stdout || error?.message || "",
+  ).toLowerCase();
+
+  return (
+    text.includes("has no upstream branch") ||
+    text.includes("no upstream branch") ||
+    text.includes("--set-upstream")
+  );
+}
+
+function pushCurrentBranch(currentBranch) {
+  if (!hasConfiguredUpstream(currentBranch)) {
+    console.log(
+      chalk.yellow(
+        `ℹ️ No upstream configured. Setting ${REMOTE}/${currentBranch} as upstream...`,
+      ),
+    );
+    execSync(`git push --set-upstream ${REMOTE} ${currentBranch}`, {
+      stdio: "inherit",
+    });
+    return;
+  }
+
+  try {
+    execSync(`git push ${REMOTE} ${currentBranch}`, {
+      stdio: ["inherit", "inherit", "pipe"],
+    });
+  } catch (error) {
+    if (!isMissingUpstreamError(error)) {
+      throw error;
+    }
+
+    console.log(
+      chalk.yellow(
+        `ℹ️ Push needs an upstream. Retrying with ${REMOTE}/${currentBranch}...`,
+      ),
+    );
+    execSync(`git push --set-upstream ${REMOTE} ${currentBranch}`, {
+      stdio: "inherit",
+    });
+  }
+}
+
 function formatGitError(error) {
   const stderr = String(error?.stderr || error?.message || "").trim();
   const text = stderr.toLowerCase();
@@ -1363,9 +1534,7 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   }
 
   try {
-    execSync(`git push ${REMOTE} ${currentBranch}`, {
-      stdio: "inherit",
-    });
+    pushCurrentBranch(currentBranch);
     console.log(chalk.green("✅ Push completed"));
     await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {

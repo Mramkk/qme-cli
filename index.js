@@ -96,6 +96,8 @@ function printHelp(options = {}) {
   // console.log(chalk.green("  qme config export [output-path]"));
   // console.log(chalk.green("  qme config branch <branch-name>"));
   // console.log(chalk.green("  qme xampp start|stop|switch <version>"));
+  console.log(chalk.green("  qme xini"));
+  console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
@@ -334,6 +336,82 @@ function runXamppStopByPlatform() {
   process.exit(1);
 }
 
+function getDefaultXamppPathsByPlatform() {
+  if (process.platform === "win32") {
+    return ["C:\\xampp", "D:\\xampp"];
+  }
+
+  if (process.platform === "darwin") {
+    return ["/Applications/XAMPP"];
+  }
+
+  return [];
+}
+
+function getXamppPathCandidates() {
+  const candidates = [];
+  const configuredPath = getXamppPath();
+
+  if (configuredPath) {
+    candidates.push(configuredPath);
+  }
+
+  if (process.platform === "win32") {
+    ["XAMPP_HOME", "XAMPP_PATH", "XAMPP_DIR"].forEach((key) => {
+      const value = process.env[key];
+      if (value && value.trim()) {
+        candidates.push(value.trim());
+      }
+    });
+  }
+
+  candidates.push(...getDefaultXamppPathsByPlatform());
+
+  return [...new Set(
+    candidates
+      .map((value) =>
+        String(value || "")
+          .trim()
+          .replace(/^"+|"+$/g, "")
+          .replace(/[\\\/]+$/g, ""),
+      )
+      .filter(Boolean),
+  )];
+}
+
+function resolveXamppPhpIniPath() {
+  const xamppRoots = getXamppPathCandidates();
+
+  if (xamppRoots.length === 0) {
+    console.log(
+      chalk.red("❌ XAMPP php.ini lookup is supported on Windows and macOS"),
+    );
+    process.exit(1);
+  }
+
+  const candidates = xamppRoots.flatMap((xamppRoot) =>
+    process.platform === "darwin"
+      ? [
+          path.join(xamppRoot, "xamppfiles", "etc", "php.ini"),
+          path.join(xamppRoot, "etc", "php.ini"),
+          path.join(xamppRoot, "php", "php.ini"),
+        ]
+      : [path.join(xamppRoot, "php", "php.ini")],
+  );
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+
+  console.log(chalk.red("❌ XAMPP php.ini file not found"));
+  console.log(chalk.yellow(`XAMPP paths: ${xamppRoots.join(", ")}`));
+  console.log(chalk.yellow(`Checked: ${candidates.join(", ")}`));
+  console.log(chalk.yellow("Set path with: qme config xampp-path <path>"));
+  process.exit(1);
+}
+
 function getOptionValue(argv, keys) {
   const index = argv.findIndex((item) => keys.includes(item));
   if (index === -1) {
@@ -548,16 +626,14 @@ function resolveLastVsCodeProjectPath() {
   return resolvedPath;
 }
 
-function tryOpenInVsCode(targetPath) {
+function tryOpenInVsCode(targetPath, label = "recent project") {
   const codeResult = spawnSync("code", [targetPath], {
     stdio: "inherit",
     shell: process.platform === "win32",
   });
 
   if (!codeResult.error && codeResult.status === 0) {
-    console.log(
-      chalk.green(`✅ Opened recent project in VS Code: ${targetPath}`),
-    );
+    console.log(chalk.green(`✅ Opened ${label} in VS Code: ${targetPath}`));
     return;
   }
 
@@ -568,9 +644,7 @@ function tryOpenInVsCode(targetPath) {
       { stdio: "inherit" },
     );
     if (!openResult.error && openResult.status === 0) {
-      console.log(
-        chalk.green(`✅ Opened recent project in VS Code: ${targetPath}`),
-      );
+      console.log(chalk.green(`✅ Opened ${label} in VS Code: ${targetPath}`));
       return;
     }
 
@@ -612,7 +686,7 @@ function tryOpenInVsCode(targetPath) {
 
       if (!result.error && result.status === 0) {
         console.log(
-          chalk.green(`✅ Opened recent project in VS Code: ${targetPath}`),
+          chalk.green(`✅ Opened ${label} in VS Code: ${targetPath}`),
         );
         return;
       }
@@ -667,6 +741,7 @@ const RESERVED_ALIAS_NAMES = new Set([
   "xstart",
   "xstop",
   "xswitch",
+  "xini",
   "xampp",
   "--help",
   "-h",
@@ -1139,6 +1214,12 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     return;
   }
 
+  if (args[0] === "xini") {
+    const phpIniPath = resolveXamppPhpIniPath();
+    tryOpenInVsCode(phpIniPath, "XAMPP php.ini");
+    return;
+  }
+
   if (args[0] === "path") {
     runWindowsCommand("explorer");
     return;
@@ -1258,6 +1339,7 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
   // console.log(chalk.green("  qme win <command...>  # Run any Windows cmd command"));
   // console.log(chalk.green("  qme xampp start|stop  # Start/stop XAMPP on Windows/macOS (start waits for phpMyAdmin readiness)"));
   // console.log(chalk.green("  qme xstart|xstop|xswitch <version>  # Shortcut for xampp start/stop/switch"));
+  // console.log(chalk.green("  qme xini  # Open current XAMPP php.ini in VS Code"));
 
   console.log(chalk.red("❌ Unknown command"));
   printHelp({
