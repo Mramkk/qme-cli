@@ -1384,6 +1384,63 @@ function getUpstreamRef(currentBranch) {
   return `${REMOTE}/${currentBranch}`;
 }
 
+function hasConfiguredUpstream(currentBranch) {
+  try {
+    const out = execSync(
+      `git for-each-ref --format="%(upstream:short)" refs/heads/${currentBranch}`,
+      { encoding: "utf8" },
+    ).trim();
+    return Boolean(out);
+  } catch {
+    return false;
+  }
+}
+
+function isMissingUpstreamError(error) {
+  const text = String(
+    error?.stderr || error?.stdout || error?.message || "",
+  ).toLowerCase();
+
+  return (
+    text.includes("has no upstream branch") ||
+    text.includes("no upstream branch") ||
+    text.includes("--set-upstream")
+  );
+}
+
+function pushCurrentBranch(currentBranch) {
+  if (!hasConfiguredUpstream(currentBranch)) {
+    console.log(
+      chalk.yellow(
+        `ℹ️ No upstream configured. Setting ${REMOTE}/${currentBranch} as upstream...`,
+      ),
+    );
+    execSync(`git push --set-upstream ${REMOTE} ${currentBranch}`, {
+      stdio: "inherit",
+    });
+    return;
+  }
+
+  try {
+    execSync(`git push ${REMOTE} ${currentBranch}`, {
+      stdio: ["inherit", "inherit", "pipe"],
+    });
+  } catch (error) {
+    if (!isMissingUpstreamError(error)) {
+      throw error;
+    }
+
+    console.log(
+      chalk.yellow(
+        `ℹ️ Push needs an upstream. Retrying with ${REMOTE}/${currentBranch}...`,
+      ),
+    );
+    execSync(`git push --set-upstream ${REMOTE} ${currentBranch}`, {
+      stdio: "inherit",
+    });
+  }
+}
+
 function formatGitError(error) {
   const stderr = String(error?.stderr || error?.message || "").trim();
   const text = stderr.toLowerCase();
@@ -1477,9 +1534,7 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   }
 
   try {
-    execSync(`git push ${REMOTE} ${currentBranch}`, {
-      stdio: "inherit",
-    });
+    pushCurrentBranch(currentBranch);
     console.log(chalk.green("✅ Push completed"));
     await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
