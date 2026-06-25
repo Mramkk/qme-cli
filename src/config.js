@@ -42,6 +42,14 @@ function getConfigPath() {
     return CONFIG_PATH;
 }
 
+function ensureConfigFile() {
+    if (!fs.existsSync(CONFIG_PATH)) {
+        saveRawConfig({ repos: {}, system: { aliases: {} } });
+    }
+
+    return CONFIG_PATH;
+}
+
 function loadOrCreateRepoConfig(repoUrl) {
     const config = loadRawConfig();
 
@@ -381,6 +389,7 @@ function removeAlias(name) {
 }
 module.exports = {
     getConfigPath,
+    ensureConfigFile,
     getAliases,
     addOrUpdateAlias,
     removeAlias,

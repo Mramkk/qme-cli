@@ -92,35 +92,42 @@ qme git remove
 qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
 ```
 
-9. `qme config branch <branch-name>`
+9. `qme config`
+   Opens the qme config file in VS Code. Creates it first if it does not exist.
+
+```bash
+qme config
+```
+
+10. `qme config branch <branch-name>`
    Stores pull branch for current repo in qme config.
 
 ```bash
 qme config branch develop
 ```
 
-10. `qme git repo project id <project-id>`
+11. `qme git repo project id <project-id>`
     Stores Git repository project ID for the current repo in qme config.
 
 ```bash
 qme git repo project id 123
 ```
 
-11. `qme config export [output-path]`
+12. `qme config export [output-path]`
     Exports qme config file backup.
 
 ```bash
 qme config export "D:\backup\mycli-config.json"
 ```
 
-12. `qme config xampp-path [path|--show|-s|--clear]`
+13. `qme config xampp-path [path|--show|-s|--clear]`
     Sets, shows, or clears configured XAMPP location.
 
 ```bash
 qme config xampp-path "D:\xampp"
 ```
 
-13. `qme config xampp-v [version|--show|-s|--clear]`
+14. `qme config xampp-v [version|--show|-s|--clear]`
     Sets, shows, or clears the active XAMPP version label in qme config.
 
 ```bash
@@ -132,7 +139,7 @@ qme config xampp-v --clear
 
 Note: this value is a qme config label (used by qme commands like `qme xampp switch`), not an auto-detected XAMPP binary version.
 
-14. `qme npm <args...>`
+15. `qme npm <args...>`
     Pass-through for npm commands.
 
 ```bash
