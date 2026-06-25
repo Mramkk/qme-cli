@@ -63,14 +63,21 @@ qme git users
 qme git repo project id 123
 ```
 
-6. `qme config branch <branch-name>`
+6. `qme config`
+   Opens the qme config file in VS Code. Creates it first if it does not exist.
+
+```bash
+qme config
+```
+
+7. `qme config branch <branch-name>`
    Stores pull branch for current repo in qme config.
 
 ```bash
 qme config branch develop
 ```
 
-7. `qme xini`
+8. `qme xini`
    Opens the current XAMPP server `php.ini` file in VS Code.
 
 ```bash

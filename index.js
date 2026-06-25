@@ -30,6 +30,7 @@ const {
   addOrUpdateAlias,
   removeAlias,
   getConfigPath,
+  ensureConfigFile,
 } = require("./src/config.js");
 const { getProjectRepoUrl } = require("./src/utils.js");
 const { initializeRepo } = require("./src/init.js");
@@ -86,6 +87,10 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
+  console.log(chalk.green("  qme mysql"));
+  console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
+  console.log(chalk.green("  qme config"));
+  console.log(chalk.gray("  Opens qme config file in VS Code"));
   console.log(chalk.green("  qme open <url>"));
   console.log(chalk.green("  qme pem -f <path-to-pem>"));
   console.log(
@@ -159,6 +164,399 @@ function runWindowsShellSync(commandLine, options = {}) {
   }
 
   return true;
+}
+
+function getMysqlBinExecutableCandidates(binaryName) {
+  const candidates = [];
+  const fileName = process.platform === "win32" ? `${binaryName}.exe` : binaryName;
+
+  for (const xamppRoot of getXamppPathCandidates()) {
+    candidates.push(path.join(xamppRoot, "mysql", "bin", fileName));
+  }
+
+  candidates.push(binaryName);
+  return [...new Set(candidates.filter(Boolean))];
+}
+
+function getMysqlExecutableCandidates() {
+  return getMysqlBinExecutableCandidates("mysql");
+}
+
+function getMysqldumpExecutableCandidates() {
+  return getMysqlBinExecutableCandidates("mysqldump");
+}
+
+function getMysqlBaseArgs() {
+  return ["-u", process.env.QME_MYSQL_USER || "root"];
+}
+
+function runMysqlCapture(mysqlPath, mysqlArgs, options = {}) {
+  const result = spawnSync(mysqlPath, mysqlArgs, {
+    encoding: "utf8",
+    windowsHide: true,
+    ...options,
+  });
+
+  return result;
+}
+
+function resolveMysqlBinExecutable(candidates, label) {
+  for (const candidate of candidates) {
+    const result = runMysqlCapture(candidate, ["--version"]);
+    if (!result.error && result.status === 0) {
+      return candidate;
+    }
+  }
+
+  console.log(chalk.red(`❌ ${label} not found`));
+  console.log(chalk.yellow(`Install MySQL client tools, add \`${label}\` to PATH, or set XAMPP path: qme config xampp-path <path>`));
+  process.exit(1);
+}
+
+function resolveMysqlExecutable() {
+  return resolveMysqlBinExecutable(getMysqlExecutableCandidates(), "MySQL client");
+}
+
+function resolveMysqldumpExecutable() {
+  return resolveMysqlBinExecutable(getMysqldumpExecutableCandidates(), "mysqldump");
+}
+
+function quoteMysqlIdentifier(value) {
+  return `\`${String(value).replace(/`/g, "``")}\``;
+}
+
+function isProtectedDatabase(databaseName) {
+  return ["information_schema", "mysql", "performance_schema", "sys"].includes(
+    String(databaseName || "").toLowerCase(),
+  );
+}
+
+function parseMysqlLines(output) {
+  return String(output || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function getMysqlDatabases(mysqlPath) {
+  const result = runMysqlCapture(mysqlPath, [
+    ...getMysqlBaseArgs(),
+    "--batch",
+    "--skip-column-names",
+    "-e",
+    "SHOW DATABASES;",
+  ]);
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to list MySQL databases"));
+    const message = result.error ? result.error.message : result.stderr;
+    if (message) {
+      console.log(chalk.yellow(String(message).trim()));
+    }
+    console.log(chalk.gray("Tip: set user with QME_MYSQL_USER if root is not correct."));
+    process.exit(1);
+  }
+
+  return parseMysqlLines(result.stdout);
+}
+
+async function askMysqlDatabase(databases) {
+  console.log(chalk.blueBright("MySQL databases:"));
+  databases.forEach((database, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${database}`));
+  });
+
+  console.log();
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose database (1-${databases.length}) [press Enter to abort]: `),
+  );
+
+  if (!answer) {
+    console.log(chalk.yellow("ℹ️ MySQL action cancelled"));
+    process.exit(0);
+  }
+
+  const selectedIndex = Number.parseInt(answer, 10);
+  if (
+    Number.isNaN(selectedIndex) ||
+    selectedIndex < 1 ||
+    selectedIndex > databases.length
+  ) {
+    console.log(chalk.red("❌ Invalid database selection"));
+    process.exit(1);
+  }
+
+  return databases[selectedIndex - 1];
+}
+
+async function askMysqlAction(databaseName) {
+  console.log();
+  console.log(chalk.blueBright(`Selected database: ${databaseName}`));
+  console.log(chalk.green("  1) Import database"));
+  console.log(chalk.green("  2) Truncate all tables"));
+  console.log(chalk.green("  3) Export database"));
+  console.log(chalk.green("  4) Open mysql shell"));
+  console.log(chalk.green("  5) Abort"));
+
+  const answer = await askQuestion(
+    chalk.yellow("👉 Choose action (1/2/3/4/5) [default: 5]: "),
+  );
+
+  if (answer === "1") {
+    return "import";
+  }
+
+  if (answer === "2") {
+    return "truncate";
+  }
+
+  if (answer === "3") {
+    return "export";
+  }
+
+  if (answer === "4") {
+    return "shell";
+  }
+
+  return "abort";
+}
+
+function resolveSqlFilePath(inputPath) {
+  const resolvedPath = parseFileUriToPath(inputPath);
+  if (!resolvedPath || !fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
+    console.log(chalk.red("❌ SQL file not found"));
+    console.log(chalk.yellow(`Path: ${inputPath}`));
+    process.exit(1);
+  }
+
+  return resolvedPath;
+}
+
+function resolveSqlExportPath(inputPath, databaseName) {
+  const resolvedPath = inputPath
+    ? path.resolve(parseFileUriToPath(inputPath) || inputPath)
+    : path.resolve(process.cwd(), `${databaseName}.sql`);
+
+  const exportDir = path.dirname(resolvedPath);
+  if (!fs.existsSync(exportDir) || !fs.statSync(exportDir).isDirectory()) {
+    console.log(chalk.red("❌ Export directory not found"));
+    console.log(chalk.yellow(`Path: ${exportDir}`));
+    process.exit(1);
+  }
+
+  return resolvedPath;
+}
+
+function importMysqlDatabase(mysqlPath, databaseName, sqlFilePath) {
+  const result = spawnSync(
+    mysqlPath,
+    [...getMysqlBaseArgs(), databaseName],
+    {
+      stdio: ["pipe", "inherit", "inherit"],
+      input: fs.readFileSync(sqlFilePath),
+      windowsHide: true,
+    },
+  );
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Database import failed"));
+    if (result.error) {
+      console.log(chalk.yellow(result.error.message));
+    }
+    process.exit(result.status || 1);
+  }
+
+  console.log(chalk.green(`✅ Imported ${sqlFilePath} into ${databaseName}`));
+}
+
+function exportMysqlDatabase(mysqldumpPath, databaseName, outputPath) {
+  const outFd = fs.openSync(outputPath, "w");
+
+  try {
+    const result = spawnSync(
+      mysqldumpPath,
+      [
+        ...getMysqlBaseArgs(),
+        "--routines",
+        "--triggers",
+        "--single-transaction",
+        databaseName,
+      ],
+      {
+        stdio: ["ignore", outFd, "inherit"],
+        windowsHide: true,
+      },
+    );
+
+    if (result.error || result.status !== 0) {
+      console.log(chalk.red("❌ Database export failed"));
+      if (result.error) {
+        console.log(chalk.yellow(result.error.message));
+      }
+      if (fs.existsSync(outputPath) && fs.statSync(outputPath).size === 0) {
+        fs.unlinkSync(outputPath);
+      }
+      process.exit(result.status || 1);
+    }
+  } finally {
+    fs.closeSync(outFd);
+  }
+
+  console.log(chalk.green(`✅ Exported ${databaseName} to ${outputPath}`));
+}
+
+function runMysqlShell(mysqlPath, databaseName) {
+  const result = spawnSync(
+    mysqlPath,
+    [...getMysqlBaseArgs(), databaseName],
+    {
+      stdio: "inherit",
+      windowsHide: false,
+    },
+  );
+
+  if (result.error) {
+    console.log(chalk.red("❌ Failed to open MySQL shell"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  process.exit(typeof result.status === "number" ? result.status : 0);
+}
+
+function getMysqlTables(mysqlPath, databaseName) {
+  const result = runMysqlCapture(mysqlPath, [
+    ...getMysqlBaseArgs(),
+    "--batch",
+    "--skip-column-names",
+    databaseName,
+    "-e",
+    "SHOW FULL TABLES WHERE Table_type = 'BASE TABLE';",
+  ]);
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to read MySQL tables"));
+    const message = result.error ? result.error.message : result.stderr;
+    if (message) {
+      console.log(chalk.yellow(String(message).trim()));
+    }
+    process.exit(1);
+  }
+
+  return parseMysqlLines(result.stdout).map((line) => line.split(/\t/)[0]).filter(Boolean);
+}
+
+async function truncateMysqlDatabase(mysqlPath, databaseName) {
+  if (isProtectedDatabase(databaseName)) {
+    console.log(chalk.red(`❌ Refusing to truncate protected database: ${databaseName}`));
+    process.exit(1);
+  }
+
+  const tables = getMysqlTables(mysqlPath, databaseName);
+  if (tables.length === 0) {
+    console.log(chalk.yellow(`ℹ️ No base tables found in ${databaseName}`));
+    return;
+  }
+
+  console.log(chalk.yellow(`⚠️ This will truncate ${tables.length} table(s) in ${databaseName}.`));
+  const confirmation = await askQuestion(
+    chalk.yellow(`Type TRUNCATE ${databaseName} to continue: `),
+  );
+
+  if (confirmation !== `TRUNCATE ${databaseName}`) {
+    console.log(chalk.yellow("ℹ️ Truncate cancelled"));
+    process.exit(0);
+  }
+
+  const statements = [
+    "SET FOREIGN_KEY_CHECKS=0;",
+    ...tables.map((table) => `TRUNCATE TABLE ${quoteMysqlIdentifier(table)};`),
+    "SET FOREIGN_KEY_CHECKS=1;",
+  ].join("\n");
+
+  const result = runMysqlCapture(mysqlPath, [
+    ...getMysqlBaseArgs(),
+    databaseName,
+    "-e",
+    statements,
+  ]);
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to truncate database"));
+    const message = result.error ? result.error.message : result.stderr;
+    if (message) {
+      console.log(chalk.yellow(String(message).trim()));
+    }
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`✅ Truncated ${tables.length} table(s) in ${databaseName}`));
+}
+
+async function runMysqlMenu(args) {
+  const mysqlPath = resolveMysqlExecutable();
+  const databases = getMysqlDatabases(mysqlPath);
+
+  if (databases.length === 0) {
+    console.log(chalk.yellow("ℹ️ No MySQL databases found"));
+    return;
+  }
+
+  const firstArg = args[1] && !String(args[1]).startsWith("-") ? args[1] : "";
+  const firstArgIsAction = ["import", "inport", "truncate", "export", "shell"].includes(firstArg);
+  const databaseName = firstArg && !firstArgIsAction ? firstArg : await askMysqlDatabase(databases);
+
+  if (!databases.includes(databaseName)) {
+    console.log(chalk.red(`❌ Database not found: ${databaseName}`));
+    process.exit(1);
+  }
+
+  const action = firstArgIsAction ? firstArg : args[2] || await askMysqlAction(databaseName);
+  const fileArgIndex = firstArgIsAction ? 2 : 3;
+
+  if (action === "import" || action === "inport") {
+    if (isProtectedDatabase(databaseName)) {
+      console.log(chalk.red(`❌ Refusing to import into protected database: ${databaseName}`));
+      process.exit(1);
+    }
+
+    const sqlFileInput = args.slice(fileArgIndex).join(" ")
+      || await askQuestion(chalk.magenta("📄 Enter .sql file path: "));
+    if (!sqlFileInput) {
+      console.log(chalk.yellow("ℹ️ Import cancelled"));
+      process.exit(0);
+    }
+
+    importMysqlDatabase(mysqlPath, databaseName, resolveSqlFilePath(sqlFileInput));
+    return;
+  }
+
+  if (action === "export") {
+    const defaultExportPath = path.resolve(process.cwd(), `${databaseName}.sql`);
+    const outputInput = args.slice(fileArgIndex).join(" ")
+      || await askQuestion(
+        chalk.magenta(`💾 Enter export .sql file path [default: ${defaultExportPath}]: `),
+      );
+
+    exportMysqlDatabase(
+      resolveMysqldumpExecutable(),
+      databaseName,
+      resolveSqlExportPath(outputInput, databaseName),
+    );
+    return;
+  }
+
+  if (action === "truncate") {
+    await truncateMysqlDatabase(mysqlPath, databaseName);
+    return;
+  }
+
+  if (action === "shell") {
+    runMysqlShell(mysqlPath, databaseName);
+    return;
+  }
+
+  console.log(chalk.yellow("ℹ️ MySQL action cancelled"));
 }
 
 function getAvailableXamppVersions(baseDir, activeVersion) {
@@ -627,10 +1025,15 @@ function resolveLastVsCodeProjectPath() {
 }
 
 function tryOpenInVsCode(targetPath, label = "recent project") {
-  const codeResult = spawnSync("code", [targetPath], {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
+  const codeArgs = ["-r", targetPath];
+  const codeResult =
+    process.platform === "win32"
+      ? spawnSync("cmd", ["/d", "/s", "/c", "code", ...codeArgs], {
+          stdio: "inherit",
+        })
+      : spawnSync("code", codeArgs, {
+          stdio: "inherit",
+        });
 
   if (!codeResult.error && codeResult.status === 0) {
     console.log(chalk.green(`✅ Opened ${label} in VS Code: ${targetPath}`));
@@ -678,7 +1081,7 @@ function tryOpenInVsCode(targetPath, label = "recent project") {
 
       const result = spawnSync(
         "cmd",
-        ["/c", `start "" "${exePath}" "${targetPath}"`],
+        ["/d", "/s", "/c", `start "" "${exePath}" -r "${targetPath}"`],
         {
           stdio: "inherit",
         },
@@ -734,6 +1137,7 @@ const RESERVED_ALIAS_NAMES = new Set([
   "gchat",
   "hub",
   "mail",
+  "mysql",
   "notepad",
   "note",
   "notes",
@@ -1059,6 +1463,17 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
       comment,
       fileTag,
     });
+    return;
+  }
+
+  if (args[0] === "mysql") {
+    await runMysqlMenu(args);
+    return;
+  }
+
+  if (args[0] === "config" && !args[1]) {
+    const configPath = ensureConfigFile();
+    tryOpenInVsCode(configPath, "qme config file");
     return;
   }
 
