@@ -1,5 +1,6 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 
 function getGitUser(scope) {
@@ -58,8 +59,40 @@ function getCurrentBranch() {
     }
 }
 
+function getCurrentIpAddress() {
+    const interfaces = os.networkInterfaces();
+    const candidates = [];
+
+    for (const entries of Object.values(interfaces)) {
+        for (const entry of entries || []) {
+            if (!entry || entry.family !== "IPv4" || entry.internal) {
+                continue;
+            }
+
+            candidates.push(entry.address);
+        }
+    }
+
+    if (candidates.length > 0) {
+        return candidates[0];
+    }
+
+    for (const entries of Object.values(interfaces)) {
+        for (const entry of entries || []) {
+            if (!entry || entry.family !== "IPv4") {
+                continue;
+            }
+
+            return entry.address;
+        }
+    }
+
+    return "";
+}
+
 module.exports = {
     getGitUser,
     getProjectRepoUrl,
-    getCurrentBranch
+    getCurrentBranch,
+    getCurrentIpAddress
 };
