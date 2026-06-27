@@ -84,6 +84,65 @@ qme config branch develop
 qme xini
 ```
 
+9. `qme xproj`
+   Lists project folders from the current XAMPP `htdocs` directory and lets you open a selected project.
+
+```bash
+qme xproj
+```
+
+10. `qme mysql`
+   Lists user databases and opens a guided menu for database actions.
+   System/helper databases are hidden from the list: `information_schema`, `mysql`, `performance_schema`, `phpmyadmin`, `sys`, and `test`.
+
+```bash
+qme mysql
+```
+
+Available menu actions:
+
+- `Create new database`: choose `0` from the database list, then enter the new database name.
+- `Import database`: imports a `.sql` file into the selected database.
+- `Export database`: exports the selected database to a `.sql` file. If no path is entered, it saves to Downloads as `database-dd-mm-yy.sql`.
+- `Truncate all tables`: empties all base tables in the selected database after confirmation.
+- `Delete database`: permanently drops the selected database. Default confirmation is `no`; type `yes` to continue.
+- `Open mysql shell`: opens the MySQL shell for the selected database.
+
+Direct commands:
+
+```bash
+# Create database
+qme mysql create my_database
+
+# Import SQL file
+qme mysql my_database import "D:\backup\my_database.sql"
+
+# Export database
+qme mysql my_database export "D:\backup\my_database.sql"
+
+# Export to default Downloads path
+qme mysql my_database export
+
+# Truncate all tables
+qme mysql my_database truncate
+
+# Delete/drop database
+qme mysql my_database delete
+qme mysql my_database drop
+
+# Open MySQL shell
+qme mysql my_database shell
+```
+
+11. `qme sprint [to-email]`
+   Opens a New Outlook web compose draft with today's date in the subject.
+   The recipient is optional; leave it blank to choose recipients in New Outlook.
+
+```bash
+qme sprint
+qme sprint team@example.com
+```
+
 ## Custom aliases
 
 Create your own shortcuts without forking `qme` by saving aliases in the qme config file.

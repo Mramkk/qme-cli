@@ -88,6 +88,8 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme mysql"));
+  console.log(chalk.green("  qme adb"));
+  console.log(chalk.gray("  Connect Android device to ADB over Wi-Fi using USB first"));
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
@@ -103,6 +105,10 @@ function printHelp(options = {}) {
   // console.log(chalk.green("  qme xampp start|stop|switch <version>"));
   console.log(chalk.green("  qme xini"));
   console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
+  console.log(chalk.green("  qme xproj"));
+  console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
+  console.log(chalk.green("  qme sprint [to-email]"));
+  console.log(chalk.gray("  Creates an Outlook sprint update mail draft"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
@@ -166,6 +172,66 @@ function runWindowsShellSync(commandLine, options = {}) {
   return true;
 }
 
+function encodeUrlValue(value) {
+  return encodeURIComponent(String(value || "")).replace(/%20/g, "+");
+}
+
+function formatShortDate(date = new Date()) {
+  return [
+    String(date.getDate()).padStart(2, "0"),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getFullYear()).slice(-2),
+  ].join("-");
+}
+
+function runSprintMail(args = []) {
+  if (process.platform !== "win32") {
+    console.log(chalk.red("❌ This command is only available on Windows"));
+    process.exit(1);
+  }
+
+  const to = args.map((arg) => String(arg || "").trim()).filter(Boolean).join("; ");
+  const datePart = formatShortDate();
+  const subject = `Sprint Update - ${datePart}`;
+  const body = [
+    "Hi Team,",
+    "",
+    "Please find the sprint update below.",
+    "",
+    "Project | Task | Status | Remarks",
+    "--------|------|--------|--------",
+    "        |      |        |",
+    "",
+    "Regards,",
+  ].join("\r\n");
+
+  const composeUrl = [
+    "https://outlook.office.com/mail/deeplink/compose",
+    `?to=${encodeUrlValue(to)}`,
+    `&subject=${encodeUrlValue(subject)}`,
+    `&body=${encodeUrlValue(body)}`,
+  ].join("");
+  const result = spawnSync(
+    "cmd",
+    ["/d", "/s", "/c", `start "" "${composeUrl}"`],
+    {
+      stdio: "inherit",
+      windowsHide: false,
+    },
+  );
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to create Outlook sprint mail"));
+    if (result.error) {
+      console.log(chalk.yellow(result.error.message));
+    }
+    console.log(chalk.yellow("Open https://outlook.office.com once, sign in, then try again."));
+    process.exit(result.status || 1);
+  }
+
+  console.log(chalk.green("✅ Opened sprint mail draft in New Outlook"));
+}
+
 function getMysqlBinExecutableCandidates(binaryName) {
   const candidates = [];
   const fileName = process.platform === "win32" ? `${binaryName}.exe` : binaryName;
@@ -225,8 +291,10 @@ function quoteMysqlIdentifier(value) {
   return `\`${String(value).replace(/`/g, "``")}\``;
 }
 
+const MYSQL_CREATE_DATABASE_ACTION = "__create_database__";
+
 function isProtectedDatabase(databaseName) {
-  return ["information_schema", "mysql", "performance_schema", "sys"].includes(
+  return ["information_schema", "mysql", "performance_schema", "phpmyadmin", "sys", "test"].includes(
     String(databaseName || "").toLowerCase(),
   );
 }
@@ -257,18 +325,21 @@ function getMysqlDatabases(mysqlPath) {
     process.exit(1);
   }
 
-  return parseMysqlLines(result.stdout);
+  return parseMysqlLines(result.stdout).filter(
+    (databaseName) => !isProtectedDatabase(databaseName),
+  );
 }
 
 async function askMysqlDatabase(databases) {
   console.log(chalk.blueBright("MySQL databases:"));
+  console.log(chalk.green("  0) Create new database"));
   databases.forEach((database, index) => {
     console.log(chalk.green(`  ${index + 1}) ${database}`));
   });
 
   console.log();
   const answer = await askQuestion(
-    chalk.yellow(`👉 Choose database (1-${databases.length}) [press Enter to abort]: `),
+    chalk.yellow(`👉 Choose database (0-${databases.length}) [press Enter to abort]: `),
   );
 
   if (!answer) {
@@ -277,6 +348,10 @@ async function askMysqlDatabase(databases) {
   }
 
   const selectedIndex = Number.parseInt(answer, 10);
+  if (selectedIndex === 0) {
+    return MYSQL_CREATE_DATABASE_ACTION;
+  }
+
   if (
     Number.isNaN(selectedIndex) ||
     selectedIndex < 1 ||
@@ -293,13 +368,14 @@ async function askMysqlAction(databaseName) {
   console.log();
   console.log(chalk.blueBright(`Selected database: ${databaseName}`));
   console.log(chalk.green("  1) Import database"));
-  console.log(chalk.green("  2) Truncate all tables"));
-  console.log(chalk.green("  3) Export database"));
-  console.log(chalk.green("  4) Open mysql shell"));
-  console.log(chalk.green("  5) Abort"));
+  console.log(chalk.green("  2) Export database"));
+  console.log(chalk.green("  3) Truncate all tables"));
+  console.log(chalk.green("  4) Delete database"));
+  console.log(chalk.green("  5) Open mysql shell"));
+  console.log(chalk.green("  6) Abort"));
 
   const answer = await askQuestion(
-    chalk.yellow("👉 Choose action (1/2/3/4/5) [default: 5]: "),
+    chalk.yellow("👉 Choose action (1/2/3/4/5/6) [default: 6]: "),
   );
 
   if (answer === "1") {
@@ -307,14 +383,18 @@ async function askMysqlAction(databaseName) {
   }
 
   if (answer === "2") {
-    return "truncate";
-  }
-
-  if (answer === "3") {
     return "export";
   }
 
+  if (answer === "3") {
+    return "truncate";
+  }
+
   if (answer === "4") {
+    return "delete";
+  }
+
+  if (answer === "5") {
     return "shell";
   }
 
@@ -332,10 +412,21 @@ function resolveSqlFilePath(inputPath) {
   return resolvedPath;
 }
 
+function getMysqlExportDefaultPath(databaseName) {
+  const now = new Date();
+  const datePart = [
+    String(now.getDate()).padStart(2, "0"),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getFullYear()).slice(-2),
+  ].join("-");
+
+  return path.join(os.homedir(), "Downloads", `${databaseName}-${datePart}.sql`);
+}
+
 function resolveSqlExportPath(inputPath, databaseName) {
   const resolvedPath = inputPath
     ? path.resolve(parseFileUriToPath(inputPath) || inputPath)
-    : path.resolve(process.cwd(), `${databaseName}.sql`);
+    : getMysqlExportDefaultPath(databaseName);
 
   const exportDir = path.dirname(resolvedPath);
   if (!fs.existsSync(exportDir) || !fs.statSync(exportDir).isDirectory()) {
@@ -367,6 +458,79 @@ function importMysqlDatabase(mysqlPath, databaseName, sqlFilePath) {
   }
 
   console.log(chalk.green(`✅ Imported ${sqlFilePath} into ${databaseName}`));
+}
+
+async function askMysqlDatabaseName(promptText = "🗄️ Enter new database name: ") {
+  const databaseName = await askQuestion(chalk.magenta(promptText));
+  if (!databaseName) {
+    console.log(chalk.yellow("ℹ️ Database create cancelled"));
+    process.exit(0);
+  }
+
+  return databaseName.trim();
+}
+
+function createMysqlDatabase(mysqlPath, databaseName) {
+  if (!databaseName) {
+    console.log(chalk.red("❌ Database name required"));
+    process.exit(1);
+  }
+
+  if (isProtectedDatabase(databaseName)) {
+    console.log(chalk.red(`❌ Refusing to create protected database name: ${databaseName}`));
+    process.exit(1);
+  }
+
+  const result = runMysqlCapture(mysqlPath, [
+    ...getMysqlBaseArgs(),
+    "-e",
+    `CREATE DATABASE ${quoteMysqlIdentifier(databaseName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`,
+  ]);
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to create database"));
+    const message = result.error ? result.error.message : result.stderr;
+    if (message) {
+      console.log(chalk.yellow(String(message).trim()));
+    }
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`✅ Created database: ${databaseName}`));
+}
+
+async function deleteMysqlDatabase(mysqlPath, databaseName) {
+  if (isProtectedDatabase(databaseName)) {
+    console.log(chalk.red(`❌ Refusing to delete protected database: ${databaseName}`));
+    process.exit(1);
+  }
+
+  console.log(chalk.red(`⚠️ This will permanently delete database: ${databaseName}`));
+  const confirmation = await askQuestion(
+    chalk.yellow("Are you sure? yes/no [default: no]: "),
+  );
+
+  if (String(confirmation || "").trim().toLowerCase() !== "yes") {
+    console.log(chalk.yellow("ℹ️ Delete cancelled"));
+    process.exit(0);
+  }
+
+  const result = runMysqlCapture(mysqlPath, [
+    ...getMysqlBaseArgs(),
+    "-e",
+    `DROP DATABASE ${quoteMysqlIdentifier(databaseName)};`,
+  ]);
+
+  if (result.error || result.status !== 0) {
+    console.log(chalk.red("❌ Failed to delete database"));
+    const message = result.error ? result.error.message : result.stderr;
+    if (message) {
+      console.log(chalk.yellow(String(message).trim()));
+    }
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`✅ Deleted database: ${databaseName}`));
 }
 
 function exportMysqlDatabase(mysqldumpPath, databaseName, outputPath) {
@@ -496,15 +660,37 @@ async function truncateMysqlDatabase(mysqlPath, databaseName) {
 async function runMysqlMenu(args) {
   const mysqlPath = resolveMysqlExecutable();
   const databases = getMysqlDatabases(mysqlPath);
+  const firstArg = args[1] && !String(args[1]).startsWith("-") ? args[1] : "";
+  const firstArgIsAction = [
+    "create",
+    "import",
+    "inport",
+    "truncate",
+    "delete",
+    "drop",
+    "export",
+    "shell",
+  ].includes(firstArg);
 
-  if (databases.length === 0) {
-    console.log(chalk.yellow("ℹ️ No MySQL databases found"));
+  if (firstArg === "create") {
+    createMysqlDatabase(mysqlPath, args.slice(2).join(" ") || await askMysqlDatabaseName());
     return;
   }
 
-  const firstArg = args[1] && !String(args[1]).startsWith("-") ? args[1] : "";
-  const firstArgIsAction = ["import", "inport", "truncate", "export", "shell"].includes(firstArg);
-  const databaseName = firstArg && !firstArgIsAction ? firstArg : await askMysqlDatabase(databases);
+  if (databases.length === 0) {
+    console.log(chalk.yellow("ℹ️ No MySQL databases found"));
+    createMysqlDatabase(mysqlPath, await askMysqlDatabaseName());
+    return;
+  }
+
+  const databaseName = firstArg && !firstArgIsAction
+    ? firstArg
+    : await askMysqlDatabase(databases);
+
+  if (databaseName === MYSQL_CREATE_DATABASE_ACTION) {
+    createMysqlDatabase(mysqlPath, await askMysqlDatabaseName());
+    return;
+  }
 
   if (!databases.includes(databaseName)) {
     console.log(chalk.red(`❌ Database not found: ${databaseName}`));
@@ -532,7 +718,7 @@ async function runMysqlMenu(args) {
   }
 
   if (action === "export") {
-    const defaultExportPath = path.resolve(process.cwd(), `${databaseName}.sql`);
+    const defaultExportPath = getMysqlExportDefaultPath(databaseName);
     const outputInput = args.slice(fileArgIndex).join(" ")
       || await askQuestion(
         chalk.magenta(`💾 Enter export .sql file path [default: ${defaultExportPath}]: `),
@@ -548,6 +734,11 @@ async function runMysqlMenu(args) {
 
   if (action === "truncate") {
     await truncateMysqlDatabase(mysqlPath, databaseName);
+    return;
+  }
+
+  if (action === "delete" || action === "drop") {
+    await deleteMysqlDatabase(mysqlPath, databaseName);
     return;
   }
 
@@ -810,6 +1001,95 @@ function resolveXamppPhpIniPath() {
   process.exit(1);
 }
 
+function resolveXamppHtdocsPath() {
+  const xamppRoots = getXamppPathCandidates();
+
+  if (xamppRoots.length === 0) {
+    console.log(
+      chalk.red("❌ XAMPP htdocs lookup is supported on Windows and macOS"),
+    );
+    process.exit(1);
+  }
+
+  const candidates = xamppRoots.flatMap((xamppRoot) =>
+    process.platform === "darwin"
+      ? [
+          path.join(xamppRoot, "xamppfiles", "htdocs"),
+          path.join(xamppRoot, "htdocs"),
+        ]
+      : [path.join(xamppRoot, "htdocs")],
+  );
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
+      return candidate;
+    }
+  }
+
+  console.log(chalk.red("❌ XAMPP htdocs folder not found"));
+  console.log(chalk.yellow(`XAMPP paths: ${xamppRoots.join(", ")}`));
+  console.log(chalk.yellow(`Checked: ${candidates.join(", ")}`));
+  console.log(chalk.yellow("Set path with: qme config xampp-path <path>"));
+  process.exit(1);
+}
+
+const SKIPPED_XAMPP_PROJECT_FOLDERS = new Set([
+  "dashboard",
+  "img",
+  "webalizer",
+  "xampp",
+]);
+
+async function runXamppProjects() {
+  const htdocsPath = resolveXamppHtdocsPath();
+  const projects = fs
+    .readdirSync(htdocsPath, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        !entry.name.startsWith(".") &&
+        !SKIPPED_XAMPP_PROJECT_FOLDERS.has(entry.name.toLowerCase()),
+    )
+    .map((entry) => entry.name)
+    .sort((a, b) =>
+      a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+    );
+
+  if (projects.length === 0) {
+    console.log(chalk.yellow("ℹ️ No project folders found in XAMPP htdocs"));
+    return;
+  }
+
+  console.log(chalk.blueBright("XAMPP projects:"));
+  projects.forEach((project, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${project}`));
+  });
+
+  console.log();
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose project (1-${projects.length}) [press Enter to abort]: `),
+  );
+
+  if (!answer) {
+    console.log(chalk.yellow("ℹ️ Project open cancelled"));
+    return;
+  }
+
+  const selectedIndex = Number.parseInt(answer, 10);
+  if (
+    Number.isNaN(selectedIndex) ||
+    selectedIndex < 1 ||
+    selectedIndex > projects.length
+  ) {
+    console.log(chalk.red("❌ Invalid project selection"));
+    process.exit(1);
+  }
+
+  tryOpenInVsCode(path.join(htdocsPath, projects[selectedIndex - 1]), "XAMPP project", {
+    newWindow: true,
+  });
+}
+
 function getOptionValue(argv, keys) {
   const index = argv.findIndex((item) => keys.includes(item));
   if (index === -1) {
@@ -839,6 +1119,241 @@ function runNodeToolCommand(tool, toolArgs) {
   if (typeof result.status === "number" && result.status !== 0) {
     process.exit(result.status);
   }
+}
+
+function resolveAdbExecutable() {
+  const candidates = process.platform === "win32" ? ["adb.exe", "adb"] : ["adb"];
+
+  for (const candidate of candidates) {
+    const result = spawnSync(candidate, ["--version"], {
+      stdio: "ignore",
+      shell: process.platform === "win32",
+    });
+
+    if (!result.error && result.status === 0) {
+      return candidate;
+    }
+  }
+
+  console.log(chalk.red("❌ adb not found"));
+  console.log(chalk.yellow("Install Android platform-tools and make sure `adb` is available in PATH."));
+  process.exit(1);
+}
+
+function runAdbCommand(adbPath, adbArgs, options = {}) {
+  const { allowFailure = false, input = undefined, expectSuccessText = "" } = options;
+  const commandText = ["adb", ...adbArgs].join(" ");
+  console.log(chalk.cyan(`▶ ${commandText}`));
+
+  const result = spawnSync(adbPath, adbArgs, {
+    encoding: "utf8",
+    input,
+    shell: process.platform === "win32",
+    windowsHide: false,
+  });
+
+  if (result.stdout && String(result.stdout).trim()) {
+    console.log(String(result.stdout).trimEnd());
+  }
+
+  if (result.stderr && String(result.stderr).trim()) {
+    console.log(chalk.yellow(String(result.stderr).trimEnd()));
+  }
+
+  const combinedOutput = `${result.stdout || ""}\n${result.stderr || ""}`;
+  const hasExpectedSuccessText =
+    !expectSuccessText || combinedOutput.toLowerCase().includes(expectSuccessText.toLowerCase());
+  const outputIndicatesFailure =
+    /failed|unable to|cannot|error:/i.test(combinedOutput) && !hasExpectedSuccessText;
+
+  if (
+    result.error ||
+    (typeof result.status === "number" && result.status !== 0) ||
+    outputIndicatesFailure
+  ) {
+    if (allowFailure) {
+      return { ok: false, result };
+    }
+
+    const message = result.error ? result.error.message : `adb exited with status ${result.status}`;
+    console.log(chalk.red(`❌ ${message}`));
+    process.exit(typeof result.status === "number" ? result.status : 1);
+  }
+
+  return { ok: true, result };
+}
+
+function getAdbDeviceList(adbPath) {
+  const { result } = runAdbCommand(adbPath, ["devices"]);
+  const lines = String(result.stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(1);
+
+  return lines
+    .map((line) => {
+      const [serial = "", status = ""] = line.split(/\s+/);
+      return { serial, status };
+    })
+    .filter((device) => device.serial);
+}
+
+function printAdbMenu() {
+  console.log(chalk.blueBright("ADB menu"));
+  console.log(chalk.green("  1) devices"));
+  console.log(chalk.green("  2) connect"));
+  console.log(chalk.green("  3) disconnect"));
+  console.log(chalk.gray("  Tip: qme adb connect will ask for IP and port"));
+}
+
+function runAdbDevices() {
+  const adbPath = resolveAdbExecutable();
+  runAdbCommand(adbPath, ["devices"]);
+}
+
+async function runAdbConnect(target) {
+  const adbPath = resolveAdbExecutable();
+  let connectTarget = String(target || "").trim();
+
+  if (!connectTarget) {
+    const ipAddress = (await askQuestion(chalk.magenta("📶 Enter device IP address: "))).trim();
+    if (!ipAddress) {
+      console.log(chalk.red("❌ IP address is required"));
+      process.exit(1);
+    }
+
+    const portValue = (await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))).trim();
+    const port = portValue || "5555";
+
+    if (!/^\d+$/.test(port)) {
+      console.log(chalk.red("❌ Invalid port"));
+      process.exit(1);
+    }
+
+    connectTarget = `${ipAddress}:${port}`;
+  } else if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(connectTarget)) {
+    const portValue = (await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))).trim();
+    const port = portValue || "5555";
+
+    if (!/^\d+$/.test(port)) {
+      console.log(chalk.red("❌ Invalid port"));
+      process.exit(1);
+    }
+
+    connectTarget = `${connectTarget}:${port}`;
+  }
+
+  const connectResult = runAdbCommand(adbPath, ["connect", connectTarget], {
+    expectSuccessText: "connected to",
+  });
+
+  const connectOutput = `${connectResult.result.stdout || ""}\n${connectResult.result.stderr || ""}`;
+  if (!/connected to|already connected to/i.test(connectOutput)) {
+    console.log(chalk.red("❌ Wireless connection failed"));
+    console.log(chalk.yellow(String(connectOutput).trim() || "adb connect did not report a successful connection."));
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`✅ Wireless ADB connected: ${connectTarget}`));
+}
+
+async function runAdbDisconnect(target) {
+  const adbPath = resolveAdbExecutable();
+  const rawTarget = String(target || "").trim();
+  const args = ["disconnect"];
+
+  if (rawTarget) {
+    args.push(rawTarget.includes(":") ? rawTarget : `${rawTarget}:5555`);
+  }
+
+  runAdbCommand(adbPath, args);
+}
+
+async function runAdbWifiConnect() {
+  const adbPath = resolveAdbExecutable();
+
+  console.log(chalk.blueBright("ADB over Wi-Fi setup"));
+  console.log(chalk.gray("Make sure the phone is connected by USB first and USB debugging is authorized."));
+
+  const devices = getAdbDeviceList(adbPath);
+  const onlineDevices = devices.filter((device) => device.status === "device");
+  const unauthorizedDevices = devices.filter((device) => device.status === "unauthorized");
+
+  if (unauthorizedDevices.length > 0) {
+    console.log(chalk.red("❌ USB debugging is not authorized"));
+    console.log(chalk.yellow("Open the phone, accept the USB debugging prompt, then try again."));
+    process.exit(1);
+  }
+
+  if (onlineDevices.length === 0) {
+    console.log(chalk.red("❌ No Android device found"));
+    console.log(chalk.yellow("Connect the device by USB and confirm `adb devices` shows a `device` status."));
+    process.exit(1);
+  }
+
+  const selectedDevice = onlineDevices[0];
+  if (onlineDevices.length > 1) {
+    console.log(chalk.yellow(`ℹ️ Multiple devices detected. Using ${selectedDevice.serial}`));
+  } else {
+    console.log(chalk.green(`✅ USB device detected: ${selectedDevice.serial}`));
+  }
+
+  runAdbCommand(adbPath, ["-s", selectedDevice.serial, "tcpip", "5555"], {
+    expectSuccessText: "restarting in tcp mode",
+  });
+
+  const finalIp = (await askQuestion(
+    chalk.magenta("📶 Enter device IP address: "),
+  )).trim();
+
+  if (!finalIp) {
+    console.log(chalk.red("❌ Invalid or unreachable IP address"));
+    console.log(chalk.yellow("Run `adb shell ip route` or `adb shell ifconfig` again and try a valid IPv4 address."));
+    process.exit(1);
+  }
+
+  console.log(chalk.blueBright("Connect the computer and device to the same Wi-Fi network, then disconnect the USB cable when ready."));
+  const connectAnswer = await askQuestion(chalk.yellow("👉 Press Enter to continue with wireless connection: "));
+  void connectAnswer;
+
+  const connectResult = runAdbCommand(adbPath, ["connect", `${finalIp}:5555`], {
+    expectSuccessText: "connected to",
+  });
+
+  const connectOutput = `${connectResult.result.stdout || ""}\n${connectResult.result.stderr || ""}`;
+  if (!/connected to|already connected to/i.test(connectOutput)) {
+    console.log(chalk.red("❌ Wireless connection failed"));
+    console.log(chalk.yellow(String(connectOutput).trim() || "adb connect did not report a successful connection."));
+    console.log(chalk.yellow("Common causes:"));
+    console.log(chalk.yellow("  - Device not found"));
+    console.log(chalk.yellow("  - Both devices are not on the same Wi-Fi network"));
+    console.log(chalk.yellow("  - USB debugging not authorized"));
+    console.log(chalk.yellow("  - TCP/IP mode not enabled"));
+    console.log(chalk.yellow("  - Invalid or unreachable IP address"));
+    process.exit(1);
+  }
+
+  console.log(chalk.blueBright("Verifying wireless ADB connection..."));
+  const verify = runAdbCommand(adbPath, ["devices"]);
+  const verifyText = String(verify.result.stdout || "");
+  const connectedLine = verifyText
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(`${finalIp}:5555`));
+
+  if (!connectedLine || !/\bdevice\b/i.test(connectedLine)) {
+    console.log(chalk.red("❌ Wireless connection failed"));
+    console.log(chalk.yellow("Common causes:"));
+    console.log(chalk.yellow("  - Device not found"));
+    console.log(chalk.yellow("  - Both devices are not on the same Wi-Fi network"));
+    console.log(chalk.yellow("  - USB debugging not authorized"));
+    console.log(chalk.yellow("  - TCP/IP mode not enabled"));
+    console.log(chalk.yellow("  - Invalid or unreachable IP address"));
+    process.exit(1);
+  }
+
+  console.log(chalk.green(`✅ Wireless ADB connected: ${finalIp}:5555`));
 }
 
 function getDesktopNotesPath() {
@@ -1024,8 +1539,8 @@ function resolveLastVsCodeProjectPath() {
   return resolvedPath;
 }
 
-function tryOpenInVsCode(targetPath, label = "recent project") {
-  const codeArgs = ["-r", targetPath];
+function tryOpenInVsCode(targetPath, label = "recent project", options = {}) {
+  const codeArgs = [options.newWindow ? "-n" : "-r", targetPath];
   const codeResult =
     process.platform === "win32"
       ? spawnSync("cmd", ["/d", "/s", "/c", "code", ...codeArgs], {
@@ -1043,7 +1558,7 @@ function tryOpenInVsCode(targetPath, label = "recent project") {
   if (process.platform === "darwin") {
     const openResult = spawnSync(
       "open",
-      ["-a", "Visual Studio Code", targetPath],
+      [...(options.newWindow ? ["-n"] : []), "-a", "Visual Studio Code", targetPath],
       { stdio: "inherit" },
     );
     if (!openResult.error && openResult.status === 0) {
@@ -1081,7 +1596,12 @@ function tryOpenInVsCode(targetPath, label = "recent project") {
 
       const result = spawnSync(
         "cmd",
-        ["/d", "/s", "/c", `start "" "${exePath}" -r "${targetPath}"`],
+        [
+          "/d",
+          "/s",
+          "/c",
+          `start "" "${exePath}" ${options.newWindow ? "-n" : "-r"} "${targetPath}"`,
+        ],
         {
           stdio: "inherit",
         },
@@ -1137,7 +1657,9 @@ const RESERVED_ALIAS_NAMES = new Set([
   "gchat",
   "hub",
   "mail",
+  "sprint",
   "mysql",
+  "adb",
   "notepad",
   "note",
   "notes",
@@ -1146,6 +1668,7 @@ const RESERVED_ALIAS_NAMES = new Set([
   "xstop",
   "xswitch",
   "xini",
+  "xproj",
   "xampp",
   "--help",
   "-h",
@@ -1471,6 +1994,61 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     return;
   }
 
+  if (args[0] === "adb") {
+    const subcommand = args[1];
+
+    if (!subcommand) {
+      printAdbMenu();
+      const choice = (await askQuestion(chalk.yellow("👉 Choose an option (1/2/3) [default: abort]: "))).trim();
+
+      if (choice === "1") {
+        runAdbDevices();
+        return;
+      }
+
+      if (choice === "2") {
+        await runAdbConnect();
+        return;
+      }
+
+      if (choice === "3") {
+        await runAdbDisconnect();
+        return;
+      }
+
+      if (!choice) {
+        console.log(chalk.yellow("ℹ️ ADB menu cancelled"));
+        return;
+      }
+
+      console.log(chalk.red("❌ Invalid selection"));
+      return;
+    }
+
+    if (subcommand === "devices") {
+      runAdbDevices();
+      return;
+    }
+
+    if (subcommand === "connect") {
+      await runAdbConnect(args[2]);
+      return;
+    }
+
+    if (subcommand === "disconnect") {
+      await runAdbDisconnect(args[2]);
+      return;
+    }
+
+    if (subcommand === "wifi" || subcommand === "setup") {
+      await runAdbWifiConnect();
+      return;
+    }
+
+    printAdbMenu();
+    return;
+  }
+
   if (args[0] === "config" && !args[1]) {
     const configPath = ensureConfigFile();
     tryOpenInVsCode(configPath, "qme config file");
@@ -1635,6 +2213,11 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     return;
   }
 
+  if (args[0] === "xproj") {
+    await runXamppProjects();
+    return;
+  }
+
   if (args[0] === "path") {
     runWindowsCommand("explorer");
     return;
@@ -1662,6 +2245,11 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
 
   if (args[0] === "mail") {
     runMail();
+    return;
+  }
+
+  if (args[0] === "sprint") {
+    runSprintMail(args.slice(1));
     return;
   }
 
