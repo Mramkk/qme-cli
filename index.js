@@ -32,7 +32,7 @@ const {
   getConfigPath,
   ensureConfigFile,
 } = require("./src/config.js");
-const { getProjectRepoUrl } = require("./src/utils.js");
+const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
 const { initializeRepo } = require("./src/init.js");
 const { runArtisan } = require("./src/laravel");
 const {
@@ -88,6 +88,7 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme mysql"));
+  console.log(chalk.green("  qme ip"));
   console.log(chalk.green("  qme adb"));
   console.log(chalk.gray("  Connect Android device to ADB over Wi-Fi using USB first"));
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
@@ -1842,6 +1843,15 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     }
     runOpen(url);
     return;
+  }
+  if (args[0] === "ip") {
+    const ipAddress = getCurrentIpAddress();
+    if (ipAddress) {
+      console.log(ipAddress);
+      return;
+    }
+
+    process.exit(1);
   }
   if (args[0] === "pem") {
     if (process.platform !== "win32") {

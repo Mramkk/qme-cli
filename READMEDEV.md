@@ -7,6 +7,7 @@ It provides shortcuts for:
 - Git initialization and sync flows
 - SSH key generation helpers
 - Quick local productivity commands from a single `qme` entry point
+- Local IP lookup
 
 Package: `@ramkumarbedia/xqme`
 
@@ -53,8 +54,6 @@ qme git users
 
 4. `qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]`
    Generate a new RSA 4096 SSH key in your platform home directory (`~/.ssh`).
-
-
 
 5. `qme git repo project id <project-id>`
    GitLab only: stores the GitLab project ID for the current repo in qme config (used by `qme git sync` to generate/open a merge request URL).
@@ -134,7 +133,14 @@ qme mysql my_database drop
 qme mysql my_database shell
 ```
 
-11. `qme sprint [to-email]`
+11. `qme ip`
+   Prints the current local IPv4 address only.
+
+```bash
+qme ip
+```
+
+12. `qme sprint [to-email]`
    Opens a New Outlook web compose draft with today's date in the subject.
    The recipient is optional; leave it blank to choose recipients in New Outlook.
 
