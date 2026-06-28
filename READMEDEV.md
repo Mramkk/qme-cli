@@ -140,13 +140,16 @@ qme mysql my_database shell
 qme ip
 ```
 
-12. `qme sprint [to-email]`
+12. `qme sprint-review [to-email]`
+13. `qme sprint-plan [to-email]`
    Opens a New Outlook web compose draft with today's date in the subject.
    The recipient is optional; leave it blank to choose recipients in New Outlook.
 
 ```bash
-qme sprint
-qme sprint team@example.com
+qme sprint-review
+qme sprint-review team@example.com
+qme sprint-plan
+qme sprint-plan team@example.com
 ```
 
 ## Custom aliases

@@ -41,6 +41,7 @@ const {
   runGoogleChat,
   runHubstaff,
   runMail,
+  runOutlookMail,
   runXamppStart,
   runXamppStop,
 } = require("./src/windows");
@@ -108,8 +109,10 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
   console.log(chalk.green("  qme xproj"));
   console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
-  console.log(chalk.green("  qme sprint [to-email]"));
-  console.log(chalk.gray("  Creates an Outlook sprint update mail draft"));
+  console.log(chalk.green("  qme sprint-review [to-email]"));
+  console.log(chalk.gray("  Creates an Outlook sprint review mail draft"));
+  console.log(chalk.green("  qme sprint-plan [to-email]"));
+  console.log(chalk.gray("  Creates an Outlook sprint plan mail draft"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
@@ -174,7 +177,7 @@ function runWindowsShellSync(commandLine, options = {}) {
 }
 
 function encodeUrlValue(value) {
-  return encodeURIComponent(String(value || "")).replace(/%20/g, "+");
+  return encodeURIComponent(String(value || ""));
 }
 
 function formatShortDate(date = new Date()) {
@@ -185,52 +188,72 @@ function formatShortDate(date = new Date()) {
   ].join("-");
 }
 
-function runSprintMail(args = []) {
+function formatMonthName(date = new Date()) {
+  return date.toLocaleString("en-US", { month: "long" });
+}
+
+function buildSprintDraft({
+  args = [],
+  title,
+  greeting,
+  intro,
+}) {
   if (process.platform !== "win32") {
     console.log(chalk.red("❌ This command is only available on Windows"));
     process.exit(1);
   }
 
-  const to = args.map((arg) => String(arg || "").trim()).filter(Boolean).join("; ");
-  const datePart = formatShortDate();
-  const subject = `Sprint Update - ${datePart}`;
+  const defaultRecipients = [
+    "hr1.neovifytechnolabs@gmail.com",
+    "suresh.r@neovify.com",
+  ];
+  const defaultCcRecipients = [
+    "neovifyqa@gmail.com",
+    "pm.neovify@gmail.com",
+  ];
+  const toList = args.length
+    ? args.map((arg) => String(arg || "").trim()).filter(Boolean)
+    : defaultRecipients;
+  const to = toList.join(";");
+  const cc = defaultCcRecipients.join(";");
+  const monthName = formatMonthName();
+  const subject = `${title} ( ${monthName} ) for This Week Backend`;
   const body = [
-    "Hi Team,",
+    greeting,
     "",
-    "Please find the sprint update below.",
+    intro,
     "",
-    "Project | Task | Status | Remarks",
-    "--------|------|--------|--------",
-    "        |      |        |",
+
     "",
     "Regards,",
   ].join("\r\n");
 
-  const composeUrl = [
-    "https://outlook.office.com/mail/deeplink/compose",
-    `?to=${encodeUrlValue(to)}`,
-    `&subject=${encodeUrlValue(subject)}`,
+  return [
+    `mailto:${encodeUrlValue(to)}`,
+    `?subject=${encodeUrlValue(subject)}`,
     `&body=${encodeUrlValue(body)}`,
+    `&cc=${encodeUrlValue(cc)}`,
   ].join("");
-  const result = spawnSync(
-    "cmd",
-    ["/d", "/s", "/c", `start "" "${composeUrl}"`],
-    {
-      stdio: "inherit",
-      windowsHide: false,
-    },
-  );
+}
 
-  if (result.error || result.status !== 0) {
-    console.log(chalk.red("❌ Failed to create Outlook sprint mail"));
-    if (result.error) {
-      console.log(chalk.yellow(result.error.message));
-    }
-    console.log(chalk.yellow("Open https://outlook.office.com once, sign in, then try again."));
-    process.exit(result.status || 1);
-  }
+function runSprintReviewMail(args = []) {
+  const composeUrl = buildSprintDraft({
+    args,
+    title: "Sprint Review",
+    greeting: "Hi QA,",
+    intro: "Please find the sprint update below.",
+  });
+  runOutlookMail(composeUrl);
+}
 
-  console.log(chalk.green("✅ Opened sprint mail draft in New Outlook"));
+function runSprintPlanMail(args = []) {
+  const composeUrl = buildSprintDraft({
+    args,
+    title: "Sprint Plan",
+    greeting: "Hi QA,",
+    intro: "Please find the sprint plan below.",
+  });
+  runOutlookMail(composeUrl);
 }
 
 function getMysqlBinExecutableCandidates(binaryName) {
@@ -982,10 +1005,10 @@ function resolveXamppPhpIniPath() {
   const candidates = xamppRoots.flatMap((xamppRoot) =>
     process.platform === "darwin"
       ? [
-          path.join(xamppRoot, "xamppfiles", "etc", "php.ini"),
-          path.join(xamppRoot, "etc", "php.ini"),
-          path.join(xamppRoot, "php", "php.ini"),
-        ]
+        path.join(xamppRoot, "xamppfiles", "etc", "php.ini"),
+        path.join(xamppRoot, "etc", "php.ini"),
+        path.join(xamppRoot, "php", "php.ini"),
+      ]
       : [path.join(xamppRoot, "php", "php.ini")],
   );
 
@@ -1015,9 +1038,9 @@ function resolveXamppHtdocsPath() {
   const candidates = xamppRoots.flatMap((xamppRoot) =>
     process.platform === "darwin"
       ? [
-          path.join(xamppRoot, "xamppfiles", "htdocs"),
-          path.join(xamppRoot, "htdocs"),
-        ]
+        path.join(xamppRoot, "xamppfiles", "htdocs"),
+        path.join(xamppRoot, "htdocs"),
+      ]
       : [path.join(xamppRoot, "htdocs")],
   );
 
@@ -1515,8 +1538,8 @@ function resolveLastVsCodeProjectPath() {
 
   const lastWindow =
     storageData &&
-    storageData.windowsState &&
-    storageData.windowsState.lastActiveWindow
+      storageData.windowsState &&
+      storageData.windowsState.lastActiveWindow
       ? storageData.windowsState.lastActiveWindow
       : null;
 
@@ -1545,11 +1568,11 @@ function tryOpenInVsCode(targetPath, label = "recent project", options = {}) {
   const codeResult =
     process.platform === "win32"
       ? spawnSync("cmd", ["/d", "/s", "/c", "code", ...codeArgs], {
-          stdio: "inherit",
-        })
+        stdio: "inherit",
+      })
       : spawnSync("code", codeArgs, {
-          stdio: "inherit",
-        });
+        stdio: "inherit",
+      });
 
   if (!codeResult.error && codeResult.status === 0) {
     console.log(chalk.green(`✅ Opened ${label} in VS Code: ${targetPath}`));
@@ -1658,7 +1681,8 @@ const RESERVED_ALIAS_NAMES = new Set([
   "gchat",
   "hub",
   "mail",
-  "sprint",
+  "sprint-review",
+  "sprint-plan",
   "mysql",
   "adb",
   "notepad",
@@ -1751,7 +1775,7 @@ async function main() {
     console.log(version || "");
     return;
   }
-  
+
   if (args[0] === "alias") {
     const sub = args[1] || "list";
 
@@ -1811,7 +1835,7 @@ async function main() {
       console.log(chalk.gray(`📄 Config updated: ${getConfigPath()}`));
       return;
     }
-if (sub === "remove" || sub === "rm" || sub === "del") {
+    if (sub === "remove" || sub === "rm" || sub === "del") {
       const name = args[2];
       if (!name) {
         console.log(chalk.red("❌ Usage: qme alias remove <name>"));
@@ -2258,8 +2282,13 @@ if (sub === "remove" || sub === "rm" || sub === "del") {
     return;
   }
 
-  if (args[0] === "sprint") {
-    runSprintMail(args.slice(1));
+  if (args[0] === "sprint" || args[0] === "sprint-review") {
+    runSprintReviewMail(args.slice(1));
+    return;
+  }
+
+  if (args[0] === "sprint-plan") {
+    runSprintPlanMail(args.slice(1));
     return;
   }
 

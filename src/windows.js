@@ -123,6 +123,29 @@ function buildBlueMailCommand() {
     return 'cmd /c start "" "BlueMail:"';
 }
 
+function buildOutlookCommand(composeUrl) {
+    const programFiles = process.env.ProgramFiles || "C:\\Program Files";
+    const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
+    const localAppData = process.env.LOCALAPPDATA || "";
+
+    const candidates = [
+        `${programFiles}\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE`,
+        `${programFilesX86}\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE`,
+        `${programFiles}\\Microsoft Office\\Office16\\OUTLOOK.EXE`,
+        `${programFilesX86}\\Microsoft Office\\Office16\\OUTLOOK.EXE`,
+        `${localAppData}\\Microsoft\\Office\\root\\Office16\\OUTLOOK.EXE`,
+    ].filter(Boolean);
+
+    const quotedUrl = `"${composeUrl}"`;
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return `cmd /c start "" "${candidate}" /c ipm.note /m ${quotedUrl}`;
+        }
+    }
+
+    return `cmd /c start "" "${composeUrl}"`;
+}
+
 function buildChromeCommand() {
     const localAppData = process.env.LOCALAPPDATA || "";
     const programFiles = process.env.ProgramFiles || "C:\\Program Files";
@@ -438,6 +461,24 @@ function runMail() {
     });
 }
 
+function runOutlookMail(composeUrl) {
+    if (process.platform !== "win32") {
+        console.log(chalk.red("❌ This command is only available on Windows"));
+        process.exit(1);
+    }
+
+    const commandLine = buildOutlookCommand(composeUrl);
+    exec(commandLine, { windowsHide: false }, error => {
+        if (error) {
+            console.log(chalk.red("❌ Outlook desktop app not found"));
+            console.log(chalk.yellow("Install Microsoft Outlook desktop and try again."));
+            process.exit(1);
+        }
+
+        console.log(chalk.green("✅ Opened Outlook desktop app"));
+    });
+}
+
 function runXamppStart() {
     if (process.platform !== "win32") {
         console.log(chalk.red("❌ This command is only available on Windows"));
@@ -542,6 +583,7 @@ module.exports = {
     runGoogleChat,
     runHubstaff,
     runMail,
+    runOutlookMail,
     runXamppStart,
     runXamppStop
 };
