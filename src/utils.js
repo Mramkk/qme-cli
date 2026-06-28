@@ -74,7 +74,7 @@ function getCurrentIpAddress() {
     }
 
     if (candidates.length > 0) {
-        return candidates[0];
+        return candidates[1] || candidates[0];
     }
 
     for (const entries of Object.values(interfaces)) {
