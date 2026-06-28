@@ -1874,7 +1874,6 @@ async function main() {
       console.log(ipAddress);
       return;
     }
-
     process.exit(1);
   }
   if (args[0] === "pem") {
