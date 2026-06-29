@@ -90,6 +90,8 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme mysql"));
   console.log(chalk.green("  qme ip"));
+  console.log(chalk.green("  qme flutter"));
+  console.log(chalk.gray("  App run, build, devices, clean, and common Flutter targets"));
   console.log(chalk.green("  qme adb"));
   console.log(chalk.gray("  Connect Android device to ADB over Wi-Fi using USB first"));
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
@@ -225,7 +227,8 @@ function buildSprintDraft({
     "",
 
     "",
-    "Regards,",
+    " Kindly let us know if any additional priorities need to be included",
+    "",
   ].join("\r\n");
 
   return [
@@ -1207,6 +1210,114 @@ function runAdbCommand(adbPath, adbArgs, options = {}) {
   return { ok: true, result };
 }
 
+function runFlutterCommand(flutterArgs) {
+  const result = spawnSync("flutter", flutterArgs, {
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+
+  if (result.error) {
+    console.log(chalk.red("❌ Failed to run Flutter command"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  process.exit(typeof result.status === "number" ? result.status : 0);
+}
+
+function printFlutterMenu() {
+  console.log(chalk.blueBright("Flutter menu"));
+  console.log(chalk.green("  1) App run"));
+  console.log(chalk.green("  2) Run debug"));
+  console.log(chalk.green("  3) Run release"));
+  console.log(chalk.green("  4) List devices"));
+  console.log(chalk.green("  5) Clean project"));
+  console.log(chalk.green("  6) Build APK"));
+  console.log(chalk.green("  7) Build App Bundle"));
+  console.log(chalk.green("  8) Build Web"));
+  console.log(chalk.green("  9) Build Windows"));
+  console.log(chalk.green("  10) Build macOS"));
+  console.log(chalk.green("  11) Build Linux"));
+  console.log(chalk.green("  12) Build iOS"));
+  console.log(chalk.gray("  You can also use: qme flutter run | build | devices | clean"));
+}
+
+async function runFlutterMenu() {
+  printFlutterMenu();
+
+  const choice = String(
+    await askQuestion(chalk.yellow("👉 Choose option (1-12) [press Enter to abort]: ")),
+  ).trim();
+
+  if (!choice) {
+    console.log(chalk.yellow("ℹ️ Flutter menu cancelled"));
+    return;
+  }
+
+  if (choice === "1") {
+    runFlutterCommand(["run"]);
+    return;
+  }
+
+  if (choice === "2") {
+    runFlutterCommand(["run", "--debug"]);
+    return;
+  }
+
+  if (choice === "3") {
+    runFlutterCommand(["run", "--release"]);
+    return;
+  }
+
+  if (choice === "4") {
+    runFlutterCommand(["devices"]);
+    return;
+  }
+
+  if (choice === "5") {
+    runFlutterCommand(["clean"]);
+    return;
+  }
+
+  if (choice === "6") {
+    runFlutterCommand(["build", "apk"]);
+    return;
+  }
+
+  if (choice === "7") {
+    runFlutterCommand(["build", "appbundle"]);
+    return;
+  }
+
+  if (choice === "8") {
+    runFlutterCommand(["build", "web"]);
+    return;
+  }
+
+  if (choice === "9") {
+    runFlutterCommand(["build", "windows"]);
+    return;
+  }
+
+  if (choice === "10") {
+    runFlutterCommand(["build", "macos"]);
+    return;
+  }
+
+  if (choice === "11") {
+    runFlutterCommand(["build", "linux"]);
+    return;
+  }
+
+  if (choice === "12") {
+    runFlutterCommand(["build", "ios"]);
+    return;
+  }
+
+  console.log(chalk.red("❌ Invalid selection"));
+  process.exit(1);
+}
+
 function getAdbDeviceList(adbPath) {
   const { result } = runAdbCommand(adbPath, ["devices"]);
   const lines = String(result.stdout || "")
@@ -2025,6 +2136,66 @@ async function main() {
   if (args[0] === "mysql") {
     await runMysqlMenu(args);
     return;
+  }
+
+  if (args[0] === "flutter") {
+    const subcommand = args[1];
+
+    if (!subcommand) {
+      await runFlutterMenu();
+      return;
+    }
+
+    if (subcommand === "run") {
+      runFlutterCommand(["run", ...args.slice(2)]);
+      return;
+    }
+
+    if (subcommand === "debug") {
+      runFlutterCommand(["run", "--debug", ...args.slice(2)]);
+      return;
+    }
+
+    if (subcommand === "release") {
+      runFlutterCommand(["run", "--release", ...args.slice(2)]);
+      return;
+    }
+
+    if (subcommand === "devices") {
+      runFlutterCommand(["devices", ...args.slice(2)]);
+      return;
+    }
+
+    if (subcommand === "clean") {
+      runFlutterCommand(["clean", ...args.slice(2)]);
+      return;
+    }
+
+    if (subcommand === "build") {
+      const target = String(args[2] || "apk").toLowerCase();
+      const buildMap = {
+        apk: ["build", "apk"],
+        appbundle: ["build", "appbundle"],
+        web: ["build", "web"],
+        windows: ["build", "windows"],
+        macos: ["build", "macos"],
+        linux: ["build", "linux"],
+        ios: ["build", "ios"],
+      };
+
+      if (!buildMap[target]) {
+        console.log(chalk.red("❌ Unknown Flutter build target"));
+        console.log(chalk.yellow("Usage: qme flutter build [apk|appbundle|web|windows|macos|linux|ios]"));
+        process.exit(1);
+      }
+
+      runFlutterCommand(buildMap[target].concat(args.slice(3)));
+      return;
+    }
+
+    console.log(chalk.red("❌ Unknown Flutter subcommand"));
+    console.log(chalk.yellow("Usage: qme flutter [run|debug|release|devices|clean|build]"));
+    process.exit(1);
   }
 
   if (args[0] === "adb") {
