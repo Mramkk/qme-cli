@@ -396,7 +396,7 @@ async function askMysqlAction(databaseName) {
   console.log(chalk.blueBright(`Selected database: ${databaseName}`));
   console.log(chalk.green("  1) Import database"));
   console.log(chalk.green("  2) Export database"));
-  console.log(chalk.green("  3) Truncate all tables"));
+  console.log(chalk.green("  3) Drop all tables"));
   console.log(chalk.green("  4) Delete database"));
   console.log(chalk.green("  5) Open mysql shell"));
   console.log(chalk.green("  6) Abort"));
@@ -637,9 +637,9 @@ function getMysqlTables(mysqlPath, databaseName) {
   return parseMysqlLines(result.stdout).map((line) => line.split(/\t/)[0]).filter(Boolean);
 }
 
-async function truncateMysqlDatabase(mysqlPath, databaseName) {
+async function dropMysqlTables(mysqlPath, databaseName) {
   if (isProtectedDatabase(databaseName)) {
-    console.log(chalk.red(`❌ Refusing to truncate protected database: ${databaseName}`));
+    console.log(chalk.red(`❌ Refusing to modify protected database: ${databaseName}`));
     process.exit(1);
   }
 
@@ -649,19 +649,19 @@ async function truncateMysqlDatabase(mysqlPath, databaseName) {
     return;
   }
 
-  console.log(chalk.yellow(`⚠️ This will truncate ${tables.length} table(s) in ${databaseName}.`));
+  console.log(chalk.yellow(`⚠️ This will drop ${tables.length} table(s) in ${databaseName}.`));
   const confirmation = await askQuestion(
-    chalk.yellow(`Type TRUNCATE ${databaseName} to continue: `),
+    chalk.yellow(`Type DROP ${databaseName} to continue: `),
   );
 
-  if (confirmation !== `TRUNCATE ${databaseName}`) {
-    console.log(chalk.yellow("ℹ️ Truncate cancelled"));
+  if (confirmation !== `DROP ${databaseName}`) {
+    console.log(chalk.yellow("ℹ️ Drop cancelled"));
     process.exit(0);
   }
 
   const statements = [
     "SET FOREIGN_KEY_CHECKS=0;",
-    ...tables.map((table) => `TRUNCATE TABLE ${quoteMysqlIdentifier(table)};`),
+    ...tables.map((table) => `DROP TABLE ${quoteMysqlIdentifier(table)};`),
     "SET FOREIGN_KEY_CHECKS=1;",
   ].join("\n");
 
@@ -673,7 +673,7 @@ async function truncateMysqlDatabase(mysqlPath, databaseName) {
   ]);
 
   if (result.error || result.status !== 0) {
-    console.log(chalk.red("❌ Failed to truncate database"));
+    console.log(chalk.red("❌ Failed to drop tables"));
     const message = result.error ? result.error.message : result.stderr;
     if (message) {
       console.log(chalk.yellow(String(message).trim()));
@@ -681,7 +681,7 @@ async function truncateMysqlDatabase(mysqlPath, databaseName) {
     process.exit(1);
   }
 
-  console.log(chalk.green(`✅ Truncated ${tables.length} table(s) in ${databaseName}`));
+  console.log(chalk.green(`✅ Dropped ${tables.length} table(s) in ${databaseName}`));
 }
 
 async function runMysqlMenu(args) {
@@ -760,7 +760,7 @@ async function runMysqlMenu(args) {
   }
 
   if (action === "truncate") {
-    await truncateMysqlDatabase(mysqlPath, databaseName);
+    await dropMysqlTables(mysqlPath, databaseName);
     return;
   }
 
