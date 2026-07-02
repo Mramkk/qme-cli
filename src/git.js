@@ -21,7 +21,7 @@ const {
   getProjectRepoUrl,
   getCurrentBranch,
 } = require("./utils.js");
-const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath } = require("./config.js");
+const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath, setRemoteBranchForRepo } = require("./config.js");
 
 const REMOTE = "origin";
 
@@ -48,6 +48,96 @@ async function askYesNo(question, defaultValue = true) {
   }
 
   return answer === "y" || answer === "yes";
+}
+
+function getRemoteBranchOptions(remote = REMOTE) {
+  try {
+    const output = execSync(
+      `git for-each-ref --sort=-committerdate --format=%(refname:short)%09%(committerdate:unix) refs/remotes/${remote}`,
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).trim();
+
+    if (!output) {
+      return [];
+    }
+
+    const branches = output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [refName, dateRaw] = line.split("\t");
+        const fullRef = String(refName || "").trim();
+        const shortName = fullRef.startsWith(`${remote}/`)
+          ? fullRef.slice(remote.length + 1)
+          : fullRef;
+        return {
+          name: shortName,
+          label: shortName,
+          sortDate: Number.parseInt(dateRaw, 10) || 0,
+        };
+      })
+      .filter((branch) => branch.name && branch.name !== "HEAD");
+
+    const seen = new Set();
+    return branches.filter((branch) => {
+      const key = branch.name.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function askRemoteBranchSelection(branches, currentBranch) {
+  if (branches.length === 0) {
+    return null;
+  }
+
+  console.log();
+  console.log(chalk.blue("🌿 Select remote branch:"));
+  branches.forEach((branch, index) => {
+    const active = branch.name === currentBranch ? " (current)" : "";
+    console.log(chalk.green(`  ${index + 1}) ${branch.label}${active}`));
+  });
+  console.log(chalk.green(`  ${branches.length + 1}) Abort`));
+
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose an option (1/${branches.length + 1}) [default: abort]: `),
+  );
+  const selected = Number.parseInt(answer, 10);
+
+  if (!Number.isInteger(selected) || selected < 1 || selected > branches.length) {
+    return null;
+  }
+
+  return branches[selected - 1];
+}
+
+async function changeRemoteBranch(repoUrl, currentBranch, currentRemoteBranch) {
+  const branches = getRemoteBranchOptions(REMOTE);
+
+  if (branches.length === 0) {
+    console.log(chalk.yellow(`ℹ️ No remote branches found on ${REMOTE}`));
+    return currentRemoteBranch;
+  }
+
+  const selected = await askRemoteBranchSelection(branches, currentRemoteBranch);
+  if (!selected) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Remote branch change aborted"));
+    return currentRemoteBranch;
+  }
+
+  setRemoteBranchForRepo(repoUrl, selected.name);
+  console.log(chalk.green(`✅ Remote pull branch updated to: ${selected.name}`));
+  if (currentBranch) {
+    console.log(chalk.gray(`ℹ️ Current local branch: ${currentBranch}`));
+  }
+  return selected.name;
 }
 
 function getGlobalGitConfigValue(key) {
@@ -930,9 +1020,9 @@ async function runGitSync() {
     );
 
     // With a clean working tree, always allow pull from the first menu.
-    const action = await askFirstMenuAction(false, true);
-    await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
-    return;
+  const action = await askFirstMenuAction(false, true);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
+  return;
   }
 
   /* ==================================================
@@ -976,6 +1066,12 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     if (didCommit) {
       await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
     }
+    return;
+  }
+
+  if (action === "change-remote-branch") {
+    const updatedBranch = await changeRemoteBranch(repoUrl, currentBranch, remoteBranch);
+    await showPullMenu(updatedBranch, currentBranch, repoUrl, projectId);
   }
 }
 

@@ -96,6 +96,13 @@ function setRemoteBranchForRepo(repoUrl, branch) {
     console.log(`📄 Config updated: ${CONFIG_PATH}`);
 }
 
+function getRemoteBranchForRepo(repoUrl) {
+    const config = loadRawConfig();
+    const repo = config.repos && config.repos[repoUrl];
+    const remoteBranch = String(repo?.remoteBranch || DEFAULT_BRANCH).trim();
+    return remoteBranch || DEFAULT_BRANCH;
+}
+
 function setProjectIdForRepo(repoUrl, projectId) {
     const config = loadRawConfig();
 
@@ -397,6 +404,7 @@ module.exports = {
     addOrUpdateGitUser,
     removeGitUser,
     loadOrCreateRepoConfig,
+    getRemoteBranchForRepo,
     setRemoteBranchForRepo,
     setProjectIdForRepo,
     exportConfig,
