@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 const chalk = require("chalk");
-const { spawnSync } = require("child_process");
+const { execSync, spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const net = require("net");
 const {
   runGitSync,
   runGitReset,
@@ -86,6 +87,8 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git sync"));
   console.log(chalk.gray("  Alias: qme gsync   (same as: qme git sync)"));
   console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
+  console.log(chalk.green("  qme pilot"));
+  console.log(chalk.gray("  Smart workspace inspector and startup helper"));
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme mysql"));
@@ -192,6 +195,289 @@ function formatShortDate(date = new Date()) {
 
 function formatMonthName(date = new Date()) {
   return date.toLocaleString("en-US", { month: "long" });
+}
+
+function safeReadJson(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return null;
+    }
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function hasFile(baseDir, fileName) {
+  try {
+    const fullPath = path.join(baseDir, fileName);
+    return fs.existsSync(fullPath) && fs.statSync(fullPath).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function hasDirectory(baseDir, dirName) {
+  try {
+    const fullPath = path.join(baseDir, dirName);
+    return fs.existsSync(fullPath) && fs.statSync(fullPath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function detectProjectProfile(baseDir) {
+  const pkg = safeReadJson(path.join(baseDir, "package.json"));
+
+  if (hasFile(baseDir, "artisan") && hasFile(baseDir, "composer.json")) {
+    return "laravel";
+  }
+  if (hasFile(baseDir, "pubspec.yaml")) {
+    return "flutter";
+  }
+  if (pkg) {
+    if (pkg.dependencies?.next || pkg.devDependencies?.next) return "next";
+    if (pkg.dependencies?.react || pkg.devDependencies?.react) return "react";
+    if (pkg.dependencies?.vite || pkg.devDependencies?.vite) return "vite";
+    return "node";
+  }
+  return "unknown";
+}
+
+function getNodePackageManager(baseDir) {
+  if (hasFile(baseDir, "pnpm-lock.yaml")) return "pnpm";
+  if (hasFile(baseDir, "yarn.lock")) return "yarn";
+  return "npm";
+}
+
+function runCommandInDir(command, args, cwd) {
+  const result = spawnSync(command, args, {
+    cwd,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+
+  if (result.error) {
+    console.log(chalk.red(`❌ Failed to run ${command}`));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    process.exit(result.status);
+  }
+
+  return true;
+}
+
+function printRunChecklist(items) {
+  console.log(chalk.blueBright("Checks:"));
+  for (const item of items) {
+    const icon = item.ok ? chalk.green("✓") : chalk.yellow("!");
+    console.log(chalk.gray(`  ${icon} ${item.label}${item.detail ? ` - ${item.detail}` : ""}`));
+  }
+  console.log();
+}
+
+function parseEnvFile(filePath) {
+  const result = {};
+  try {
+    if (!fs.existsSync(filePath)) {
+      return result;
+    }
+
+    const lines = fs.readFileSync(filePath, "utf8").split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        continue;
+      }
+
+      const idx = trimmed.indexOf("=");
+      if (idx === -1) {
+        continue;
+      }
+
+      const key = trimmed.slice(0, idx).trim();
+      let value = trimmed.slice(idx + 1).trim();
+      value = value.replace(/^"+|"+$/g, "").replace(/^'+|'+$/g, "");
+      result[key] = value;
+    }
+  } catch {
+    return result;
+  }
+
+  return result;
+}
+
+function waitForTcpPort(host, port, timeoutMs = 30000, pollMs = 1000) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+
+    const tryConnect = () => {
+      const socket = net.connect({ host, port });
+
+      socket.once("connect", () => {
+        socket.destroy();
+        resolve(true);
+      });
+
+      socket.once("error", () => {
+        socket.destroy();
+        if (Date.now() - startedAt >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+
+        setTimeout(tryConnect, pollMs);
+      });
+
+      socket.setTimeout(2000, () => {
+        socket.destroy();
+        if (Date.now() - startedAt >= timeoutMs) {
+          resolve(false);
+          return;
+        }
+
+        setTimeout(tryConnect, pollMs);
+      });
+    };
+
+    tryConnect();
+  });
+}
+
+function inspectRunEnvironment(baseDir) {
+  const profile = detectProjectProfile(baseDir);
+  const pkg = safeReadJson(path.join(baseDir, "package.json"));
+  const envValues = parseEnvFile(path.join(baseDir, ".env"));
+  const checks = [];
+  const hasEnv = hasFile(baseDir, ".env");
+  const hasEnvExample = hasFile(baseDir, ".env.example");
+  const nodeModules = hasDirectory(baseDir, "node_modules");
+
+  if (profile === "laravel") {
+    checks.push({ ok: hasEnv, label: ".env", detail: hasEnv ? "found" : hasEnvExample ? "missing, .env.example exists" : "missing" });
+    checks.push({ ok: hasFile(baseDir, "artisan"), label: "artisan", detail: "Laravel entry point" });
+  } else if (profile === "node" || profile === "react" || profile === "vite" || profile === "next") {
+    checks.push({ ok: nodeModules, label: "node_modules", detail: nodeModules ? "installed" : "missing" });
+    checks.push({ ok: hasEnv || hasEnvExample, label: ".env", detail: hasEnv ? "found" : hasEnvExample ? "only .env.example found" : "missing" });
+  } else if (profile === "flutter") {
+    checks.push({ ok: hasFile(baseDir, "pubspec.yaml"), label: "pubspec.yaml", detail: "Flutter project" });
+  }
+
+  const scripts = pkg?.scripts ? Object.keys(pkg.scripts) : [];
+  const startScript = scripts.includes("start");
+  const devScript = scripts.includes("dev");
+  const nextStep =
+    profile === "laravel" ? "php artisan serve" :
+    profile === "flutter" ? "flutter run" :
+    devScript ? "npm run dev" :
+    startScript ? "npm start" : "";
+
+  return { profile, pkg, checks, hasEnv, hasEnvExample, nodeModules, nextStep, envValues };
+}
+
+function runPilot() {
+  const baseDir = process.cwd();
+  const info = inspectRunEnvironment(baseDir);
+
+  console.log();
+  console.log(chalk.blueBright("qme pilot"));
+  console.log(chalk.gray(`Workspace: ${baseDir}`));
+  console.log();
+  console.log(chalk.green(`Project: ${info.profile}`));
+
+  const gitBranch = (() => {
+    try {
+      return execSync("git branch --show-current", { cwd: baseDir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+    } catch {
+      return "";
+    }
+  })();
+
+  if (gitBranch) {
+    console.log(chalk.green(`Git branch: ${gitBranch}`));
+  }
+
+  printRunChecklist(info.checks);
+
+  const scripts = info.pkg?.scripts ? Object.keys(info.pkg.scripts) : [];
+  if (scripts.length) {
+    console.log(chalk.green(`Scripts: ${scripts.slice(0, 6).join(", ")}${scripts.length > 6 ? "..." : ""}`));
+  }
+  console.log(chalk.green(`Env: ${info.hasEnv ? ".env found" : info.hasEnvExample ? ".env.example only" : "missing"}`));
+  if (info.nextStep) {
+    console.log(chalk.cyan(`Suggested start: ${info.nextStep}`));
+  }
+  console.log();
+}
+
+async function runWorkspace() {
+  const baseDir = process.cwd();
+  const info = inspectRunEnvironment(baseDir);
+
+  console.log();
+  console.log(chalk.blueBright("qme run"));
+  console.log(chalk.gray(`Workspace: ${baseDir}`));
+  console.log(chalk.green(`Detected: ${info.profile}`));
+  printRunChecklist(info.checks);
+
+  if (info.profile === "laravel") {
+    const dbConnection = String(info.envValues.DB_CONNECTION || "mysql").toLowerCase();
+    const dbHost = String(info.envValues.DB_HOST || "127.0.0.1").trim() || "127.0.0.1";
+    const dbPort = Number.parseInt(info.envValues.DB_PORT || "3306", 10) || 3306;
+
+    console.log(chalk.cyan("Starting XAMPP first..."));
+    runXamppStartByPlatform();
+
+    if (dbConnection === "mysql") {
+      console.log(chalk.cyan(`Waiting for database ${dbHost}:${dbPort}...`));
+      const dbReady = await waitForTcpPort(dbHost, dbPort, 45000, 1500);
+      if (!dbReady) {
+        console.log(chalk.red("❌ Database is not reachable yet"));
+        console.log(chalk.yellow(`Expected MySQL on ${dbHost}:${dbPort}`));
+        console.log(chalk.yellow("Start MySQL in XAMPP, or fix DB_HOST / DB_PORT in .env"));
+        return;
+      }
+    }
+
+    console.log(chalk.cyan("Starting Laravel server..."));
+    runCommandInDir("php", ["artisan", "serve"], baseDir);
+    return;
+  }
+
+  if (info.profile === "flutter") {
+    console.log(chalk.cyan("Starting Flutter app..."));
+    runCommandInDir("flutter", ["run"], baseDir);
+    return;
+  }
+
+  if (info.profile === "node" || info.profile === "react" || info.profile === "vite" || info.profile === "next") {
+    const manager = getNodePackageManager(baseDir);
+    if (!info.nodeModules) {
+      console.log(chalk.cyan(`Installing dependencies with ${manager}...`));
+      runCommandInDir(manager, ["install"], baseDir);
+    }
+
+    const scripts = info.pkg?.scripts || {};
+    if (scripts.dev) {
+      console.log(chalk.cyan(`Running ${manager} run dev...`));
+      runCommandInDir(manager, ["run", "dev"], baseDir);
+      return;
+    }
+
+    if (scripts.start) {
+      console.log(chalk.cyan(`Running ${manager} run start...`));
+      runCommandInDir(manager, ["run", "start"], baseDir);
+      return;
+    }
+
+    console.log(chalk.yellow("ℹ️ No dev/start script found"));
+    return;
+  }
+
+  console.log(chalk.yellow("ℹ️ Unknown project type"));
 }
 
 function buildSprintDraft({
@@ -2279,6 +2565,11 @@ async function main() {
       chalk.green("✅ Remote branch for this project is now set to:"),
       chalk.cyan(branch),
     );
+    return;
+  }
+
+  if (args[0] === "run") {
+    await runWorkspace();
     return;
   }
 
