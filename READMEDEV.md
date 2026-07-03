@@ -6,15 +6,16 @@ It provides shortcuts for:
 
 - Git initialization and sync flows
 - SSH key generation helpers
-- Quick local productivity commands from a single `qme` entry point
-- Local IP lookup
+- Workspace inspection and run helpers
+- Windows/macOS utility commands
+- XAMPP, MySQL, Flutter, and Android ADB workflows
+- Local productivity commands from a single `qme` entry point
 
 Package: `@ramkumarbedia/xqme`
 
 ## Install
 
 ```bash
-# Global install
 npm i -g @ramkumarbedia/xqme
 ```
 
@@ -26,124 +27,143 @@ qme --help
 qme --version
 ```
 
-## Commands (With Example)
+## Core Commands
 
-1. `qme git sync`
-   Runs guided commit/pull/push flow. After successful push, it can generate and open a GitLab merge request URL (`source_branch -> target_branch`)
-
-   Note: if the current local branch has no upstream during push, `qme git sync` automatically runs `git push --set-upstream origin <branch-name>` and sets the tracking branch.
+### Git
 
 ```bash
 qme git sync
-```
-
-2. `qme git open`
-   Opens current repository remote URL in browser at the current branch page.
-   Alias: `qme git -o`
-
-```bash
 qme git open
-```
-
-3. `qme git users [switch|add|remove]`
-   Manage multiple Git identities saved in qme config.
-
-```bash
 qme git users
-```
-
-4. `qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]`
-   Generate a new RSA 4096 SSH key in your platform home directory (`~/.ssh`).
-
-5. `qme git repo project id <project-id>`
-   GitLab only: stores the GitLab project ID for the current repo in qme config (used by `qme git sync` to generate/open a merge request URL).
-
-```bash
+qme git users add
+qme git users remove
+qme git ssh-key --home "C:\Users\ADMIN" --comment "demo@example.com" --tag "oodle"
 qme git repo project id 123
 ```
 
-6. `qme config`
-   Opens the qme config file in VS Code. Creates it first if it does not exist.
+- `qme git sync` runs the guided commit/pull/push flow.
+- `qme git open` opens the current repository remote in the browser.
+- `qme git users [switch|add|remove]` manages saved Git identities.
+- `qme git ssh-key` creates an RSA 4096 SSH key in the platform home directory.
+- `qme git repo project id <project-id>` stores the repo project ID for GitLab merge request automation.
+
+### Config
 
 ```bash
 qme config
-```
-
-7. `qme config branch <branch-name>`
-   Stores pull branch for current repo in qme config.
-
-```bash
 qme config branch develop
+qme config export "D:\backup\qme-config.json"
+qme config xampp-path "D:\xampp"
+qme config xampp-v 8.1
+qme config xampp-v --show
+qme config xampp-v --clear
 ```
 
-8. `qme xini`
-   Opens the current XAMPP server `php.ini` file in VS Code.
+### Workspace
 
 ```bash
+qme pilot
+qme run
+qme open https://example.com
+qme alias list
+qme alias add gs -- git sync
+qme alias remove gs
+```
+
+- `qme pilot` inspects the current workspace and prints a quick readiness summary.
+- `qme run` starts the detected project type when possible.
+- `qme open <url>` opens a URL or local target.
+- `qme alias` lets you create custom shortcuts in qme config.
+
+### Flutter
+
+```bash
+qme flutter
+qme flutter run
+qme flutter build apk
+qme flutter devices
+qme flutter clean
+```
+
+- `qme flutter` is the Flutter helper entry point.
+- `qme flutter build` supports targets like `apk`, `appbundle`, `web`, `windows`, `macos`, `linux`, and `ios`.
+
+### Android ADB
+
+```bash
+qme adb
+qme adb devices
+qme adb connect
+qme adb -s <device> shell
+```
+
+- `qme adb` is the Android device helper entry point.
+- `qme adb connect` helps connect a USB-attached device to ADB over Wi-Fi.
+
+### XAMPP
+
+```bash
+qme xampp start
+qme xampp stop
+qme xampp switch 8.2
+qme xstart
+qme xstop
+qme xswitch 8.2
 qme xini
-```
-
-9. `qme xproj`
-   Lists project folders from the current XAMPP `htdocs` directory and lets you open a selected project.
-
-```bash
 qme xproj
 ```
 
-10. `qme mysql`
-   Lists user databases and opens a guided menu for database actions.
-   System/helper databases are hidden from the list: `information_schema`, `mysql`, `performance_schema`, `phpmyadmin`, `sys`, and `test`.
+- `qme xampp start|stop|switch` manages XAMPP.
+- `qme xstart|xstop|xswitch` are shortcuts for the same flows.
+- `qme xini` opens the active XAMPP `php.ini`.
+- `qme xproj` lists projects from the active XAMPP `htdocs` directory.
+
+### MySQL
 
 ```bash
 qme mysql
-```
-
-Available menu actions:
-
-- `Create new database`: choose `0` from the database list, then enter the new database name.
-- `Import database`: imports a `.sql` file into the selected database.
-- `Export database`: exports the selected database to a `.sql` file. If no path is entered, it saves to Downloads as `database-dd-mm-yy.sql`.
-- `Truncate all tables`: empties all base tables in the selected database after confirmation.
-- `Delete database`: permanently drops the selected database. Default confirmation is `no`; type `yes` to continue.
-- `Open mysql shell`: opens the MySQL shell for the selected database.
-
-Direct commands:
-
-```bash
-# Create database
 qme mysql create my_database
-
-# Import SQL file
 qme mysql my_database import "D:\backup\my_database.sql"
-
-# Export database
-qme mysql my_database export "D:\backup\my_database.sql"
-
-# Export to default Downloads path
 qme mysql my_database export
-
-# Truncate all tables
 qme mysql my_database truncate
-
-# Delete/drop database
 qme mysql my_database delete
-qme mysql my_database drop
-
-# Open MySQL shell
 qme mysql my_database shell
 ```
 
-11. `qme ip`
-   Prints the current local IPv4 address only.
+- `qme mysql` opens the guided database action menu.
+- `qme mysql create`, `import`, `export`, `truncate`, `delete`, and `shell` are available as direct commands.
+
+### Windows and Productivity
 
 ```bash
-qme ip
+qme wintask
+qme taskm
+qme wl
+qme path
+qme .
+qme postman
+qme chrome
+qme gchat
+qme hub start
+qme hub stop
+qme mail
+qme notepad notes.txt
+qme note "daily update done"
+qme notes "follow up tomorrow"
+qme quit
+qme timer 25 "Deep work"
+qme timer 0.01 "notify demo" --popup
 ```
 
-12. `qme sprint-review [to-email]`
-13. `qme sprint-plan [to-email]`
-   Opens a New Outlook web compose draft with today's date in the subject.
-   The recipient is optional; leave it blank to choose recipients in New Outlook.
+- `qme wintask` and `qme taskm` open Task Manager.
+- `qme wl` locks the current Windows session.
+- `qme path` opens the current folder in File Explorer, while `qme .` opens the current folder in Finder or File Explorer.
+- `qme postman`, `qme chrome`, `qme gchat`, `qme hub`, `qme mail`, and `qme notepad` launch common apps.
+- `qme note` and `qme notes` write to today's desktop note file.
+- `qme quit` closes helper apps and shuts down Windows.
+- `qme timer` starts a Pomodoro-style countdown with notification support.
+
+### Mail Drafts
 
 ```bash
 qme sprint-review
@@ -152,36 +172,28 @@ qme sprint-plan
 qme sprint-plan team@example.com
 ```
 
-## Custom aliases
+- These commands create Outlook compose drafts with today's month in the subject.
+- The recipient is optional.
 
-Create your own shortcuts without forking `qme` by saving aliases in the qme config file.
+### PEM Permissions
 
 ```bash
-# Add / update (recommended)
-qme alias add <name> -- <command...>
-
-# PowerShell-safe (if -- gets swallowed)
-qme alias add <name> "--" <command...>
-
-# List
-qme alias list
-
-# Remove
-qme alias remove <name>
+qme pem -f "C:\path\to\file.pem"
 ```
 
-Examples:
+- `qme pem` fixes file permissions for a PEM key file.
+
+## Custom Aliases
+
+Create your own shortcuts without forking `qme` by saving aliases in the qme config file.
 
 ```bash
 qme alias add gs -- git sync
 qme gs
 
-# Cross-platform open URL (use this instead of Windows `start`)
 qme open http://localhost:8000
 qme alias add web -- open http://localhost:8000
 qme web
-
-
 ```
 
 Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.json`) under `system.aliases`:
@@ -195,4 +207,3 @@ Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.j
   }
 }
 ```
-
