@@ -140,6 +140,20 @@ async function changeRemoteBranch(repoUrl, currentBranch, currentRemoteBranch) {
   return selected.name;
 }
 
+function changePullBranchToSelectedBranch(repoUrl, currentBranch, selectedBranch) {
+  const branchName = String(selectedBranch?.name || "").trim();
+  if (!branchName) {
+    console.log(chalk.yellow("ℹ️ No branch selected"));
+    return;
+  }
+
+  setRemoteBranchForRepo(repoUrl, branchName);
+  console.log(chalk.green(`✅ Remote pull branch updated to: ${branchName}`));
+  if (currentBranch) {
+    console.log(chalk.gray(`ℹ️ Current local branch: ${currentBranch}`));
+  }
+}
+
 function getGlobalGitConfigValue(key) {
   try {
     return execSync(`git config --global --get ${key}`, { encoding: "utf8" }).trim();
@@ -1060,6 +1074,42 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "branches") {
+    const selectedBranch = await askBranchSelectionMenu(currentBranch);
+
+    if (!selectedBranch) {
+      console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
+      return;
+    }
+
+    const branchAction = await askBranchMenuAction();
+
+    if (branchAction === "abort") {
+      console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
+      return;
+    }
+
+    if (branchAction === "new-branch") {
+      await createBranchFromMenu(currentBranch);
+      return;
+    }
+
+    if (branchAction === "change-pull-branch") {
+      changePullBranchToSelectedBranch(repoUrl, currentBranch, selectedBranch);
+      return;
+    }
+
+    if (branchAction === "merge-branch") {
+      await mergeBranchFromMenu(selectedBranch.name);
+      return;
+    }
+
+    if (branchAction === "delete-branch") {
+      await deleteBranchFromMenu(selectedBranch.name);
+      return;
+    }
+  }
+
   if (action === "commit") {
     const message = await askCommitMessage();
     const didCommit = commitChanges(message);
@@ -1069,9 +1119,10 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
-  if (action === "change-remote-branch") {
+  if (action === "change-pull-branch") {
     const updatedBranch = await changeRemoteBranch(repoUrl, currentBranch, remoteBranch);
     await showPullMenu(updatedBranch, currentBranch, repoUrl, projectId);
+    return;
   }
 }
 
@@ -1153,6 +1204,60 @@ async function askCheckoutBranchSelection(branches) {
   return branches[selected - 1];
 }
 
+async function askBranchMenuAction() {
+  console.log();
+  console.log(chalk.blue("🌿 Branches:"));
+  console.log(chalk.green("  1) New branch"));
+  console.log(chalk.green("  2) Change pull branch"));
+  console.log(chalk.green("  3) Merge branch"));
+  console.log(chalk.green("  4) Delete branch"));
+  console.log(chalk.green("  5) Abort"));
+
+  const answer = await askQuestion(
+    chalk.yellow("👉 Choose an option (1/2/3/4/5) [default: abort]: "),
+  );
+  const value = String(answer || "").trim();
+
+  if (value === "1") return "new-branch";
+  if (value === "2") return "change-pull-branch";
+  if (value === "3") return "merge-branch";
+  if (value === "4") return "delete-branch";
+  return "abort";
+}
+
+async function askBranchSelectionMenu(currentBranch) {
+  const branches = getCheckoutBranchOptions(currentBranch);
+  if (branches.length === 0) {
+    console.log(chalk.yellow("ℹ️ No other local branches found"));
+    return null;
+  }
+
+  console.log();
+  console.log(chalk.blue("🌿 Local branches:"));
+  branches.forEach((branch, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${branch.label}`));
+  });
+  console.log(chalk.green(`  ${branches.length + 1}) Abort`));
+
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Choose a branch (1/${branches.length + 1}) [default: abort]: `),
+  );
+  const selected = Number.parseInt(answer, 10);
+
+  if (!Number.isInteger(selected) || selected < 1 || selected > branches.length) {
+    return null;
+  }
+
+  return branches[selected - 1];
+}
+
+async function askNewBranchName(currentBranch) {
+  const answer = await askQuestion(
+    chalk.yellow(`🌱 Enter new branch name (from ${currentBranch}): `),
+  );
+  return String(answer || "").trim();
+}
+
 async function checkoutBranchFromMenu(currentBranch) {
   const branches = getCheckoutBranchOptions(currentBranch);
 
@@ -1182,6 +1287,86 @@ async function checkoutBranchFromMenu(currentBranch) {
   }
 
   console.log(chalk.green(`✅ Checked out branch: ${selected.name}`));
+}
+
+async function createBranchFromMenu(currentBranch) {
+  const branchName = await askNewBranchName(currentBranch);
+  if (!branchName) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Branch creation aborted"));
+    return;
+  }
+
+  const result = spawnSync("git", ["checkout", "-b", branchName], {
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) {
+    console.log(chalk.red("❌ Branch creation failed"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    console.log(chalk.red("❌ Branch creation failed"));
+    process.exit(result.status);
+  }
+
+  console.log(chalk.green(`✅ Created new branch: ${branchName}`));
+}
+
+async function mergeBranchFromMenu(currentBranch) {
+  const branches = getCheckoutBranchOptions(currentBranch);
+  const selected = await askCheckoutBranchSelection(branches);
+  if (!selected) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Merge aborted"));
+    return;
+  }
+
+  const result = spawnSync("git", ["merge", selected.name], {
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) {
+    console.log(chalk.red("❌ Merge failed"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    console.log(chalk.red("❌ Merge failed"));
+    process.exit(result.status);
+  }
+
+  console.log(chalk.green(`✅ Merged branch: ${selected.name}`));
+}
+
+async function deleteBranchFromMenu(currentBranch) {
+  const branches = getCheckoutBranchOptions(currentBranch);
+  const selected = await askCheckoutBranchSelection(branches);
+  if (!selected) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Delete aborted"));
+    return;
+  }
+
+  const result = spawnSync("git", ["branch", "-d", selected.name], {
+    stdio: "inherit",
+    shell: false,
+  });
+
+  if (result.error) {
+    console.log(chalk.red("❌ Delete failed"));
+    console.log(chalk.yellow(result.error.message));
+    process.exit(1);
+  }
+
+  if (typeof result.status === "number" && result.status !== 0) {
+    console.log(chalk.red("❌ Delete failed"));
+    process.exit(result.status);
+  }
+
+  console.log(chalk.green(`✅ Deleted branch: ${selected.name}`));
 }
 
 async function runGitReset() {

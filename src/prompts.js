@@ -33,7 +33,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
         if (allowCommit) {
             console.log(chalk.green("  0) Commit"));
             console.log(chalk.green("  1) Stash"));
-            console.log(chalk.green("  2) Change remote branch"));
+            console.log(chalk.green("  2) Branches"));
             console.log(chalk.green("  3) Abort"));
 
             rl.question(
@@ -44,7 +44,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
 
                     if (!value || value === "0") resolve("commit");
                     else if (value === "1") resolve("stash");
-                    else if (value === "2") resolve("change-remote-branch");
+                    else if (value === "2") resolve("branches");
                     else resolve("abort");
                 }
             );
