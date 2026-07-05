@@ -67,6 +67,7 @@ qme run
 qme open https://example.com
 qme alias list
 qme alias add gs -- git sync
+qme alias add gitlabTask --value https://gitlab.com/web-management1/streamlytv-web/-/boards
 qme alias remove gs
 ```
 
@@ -194,7 +195,15 @@ qme gs
 qme open http://localhost:8000
 qme alias add web -- open http://localhost:8000
 qme web
+
+qme alias add gitlabTask --value https://gitlab.com/web-management1/streamlytv-web/-/boards
+qme gitlabTask
 ```
+
+`qme alias add` supports two common forms:
+
+- `qme alias add <name> -- <command...>` for regular command aliases.
+- `qme alias add <name> --value <url>` for URL shortcuts that open in the browser.
 
 Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.json`) under `system.aliases`:
 
@@ -202,7 +211,8 @@ Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.j
 {
   "system": {
     "aliases": {
-      "gs": ["git", "sync"]
+      "gs": ["git", "sync"],
+      "gitlabTask": ["open", "https://gitlab.com/web-management1/streamlytv-web/-/boards"]
     }
   }
 }

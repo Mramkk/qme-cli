@@ -2113,6 +2113,23 @@ function isAliasSeparator(token) {
   return /^[\-\u2010\u2011\u2012\u2013\u2014\u2015\u2212]{2,}$/.test(value);
 }
 
+function looksLikeUrl(value) {
+  return typeof value === "string" && /^(https?:\/\/|file:\/\/|www\.)/i.test(value);
+}
+
+function getOptionValueFromArgs(args, names) {
+  for (let i = 0; i < args.length; i += 1) {
+    if (!names.includes(args[i])) {
+      continue;
+    }
+    const value = args[i + 1];
+    if (typeof value === "string" && value.length > 0 && !String(value).startsWith("-")) {
+      return value;
+    }
+  }
+  return "";
+}
+
 function expandAliases(inputArgs) {
   let args = Array.isArray(inputArgs) ? [...inputArgs] : [];
   if (!args.length) {
@@ -2202,9 +2219,19 @@ async function main() {
       const name = args[2];
       const sepIndex = args.findIndex(isAliasSeparator);
       const tokens = sepIndex >= 0 ? args.slice(sepIndex + 1) : [];
+      const valueArg = getOptionValueFromArgs(args, ["--value", "-v"]);
+      const cmdArg = getOptionValueFromArgs(args, ["--cmd", "--command", "-c"]);
+      const inlineValue = args[3];
+      const urlShortcut = !sepIndex && looksLikeUrl(inlineValue);
+      const urlAliasTarget = valueArg || (urlShortcut ? inlineValue : "");
+      const shortcutTokens = urlAliasTarget ? ["open", urlAliasTarget] : [];
+      const directCmdTokens = cmdArg ? cmdArg.trim().split(/\s+/).filter(Boolean) : [];
+      const explicitTokens = sepIndex >= 0 ? tokens : directCmdTokens;
+      const shouldUseUrlShortcut = Boolean(urlAliasTarget);
 
-      if (!name || sepIndex < 0 || sepIndex < 3 || tokens.length === 0) {
+      if (!name || (!shouldUseUrlShortcut && sepIndex < 0 && directCmdTokens.length === 0 && tokens.length === 0)) {
         console.log(chalk.red("❌ Usage: qme alias add <name> -- <command...>"));
+        console.log(chalk.gray("   or: qme alias add <name> --value <url>"));
         console.log(
           chalk.gray(
             "Tip: if you're running qme via npm scripts, you may need: npm run <script> -- --",
@@ -2218,7 +2245,8 @@ async function main() {
         process.exit(1);
       }
 
-      const ok = addOrUpdateAlias(name, tokens);
+      const finalTokens = shouldUseUrlShortcut ? shortcutTokens : explicitTokens;
+      const ok = addOrUpdateAlias(name, finalTokens);
       if (!ok) {
         console.log(chalk.red("❌ Invalid alias name or command"));
         console.log(
@@ -2228,7 +2256,13 @@ async function main() {
       }
 
       console.log(chalk.green(`✅ Alias saved: ${name}`));
-      console.log(chalk.gray("   ->"), chalk.cyan(formatAliasTokens(tokens)));
+      console.log(chalk.gray("   ->"), chalk.cyan(formatAliasTokens(finalTokens)));
+      if (cmdArg) {
+        console.log(chalk.gray("   cmd:"), chalk.cyan(cmdArg));
+      }
+      if (valueArg || urlShortcut) {
+        console.log(chalk.gray(" value:"), chalk.cyan(urlAliasTarget));
+      }
       console.log(chalk.gray(`📄 Config updated: ${getConfigPath()}`));
       return;
     }
