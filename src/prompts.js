@@ -132,14 +132,20 @@ function askAfterPullAction(currentBranch) {
         const rl = createRL();
 
         console.log();
+        console.log(chalk.blue("🔹 Select an action:"));
+        console.log(chalk.green("  0) Push"));
+        console.log(chalk.green("  1) Hard reset and force push"));
+        console.log(chalk.green("  2) Skip"));
         rl.question(
-            chalk.yellow("⬆️".padEnd(4, " ") + `Do you want to push current branch (${currentBranch})? (y/N): `),
+            chalk.yellow("👉 Choose an option (0/1/2) [default: 0]: "),
             answer => {
                 rl.close();
-                const value = answer.trim().toLowerCase();
+                const value = answer.trim();
 
-                if (value === "y" || value === "yes") {
+                if (!value || value === "0") {
                     resolve("push");
+                } else if (value === "1") {
+                    resolve("force-push");
                 } else {
                     resolve("skip");
                 }
