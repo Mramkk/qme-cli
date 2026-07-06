@@ -1035,7 +1035,7 @@ async function runGitSync() {
 
     // With a clean working tree, always allow pull from the first menu.
   const action = await askFirstMenuAction(false, true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   return;
   }
 
@@ -1047,12 +1047,12 @@ async function runGitSync() {
   console.log(chalk.cyan(changes));
 
   const action = await askFirstMenuAction(true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
 }
 
 /* ================= HELPERS ================= */
 
-async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId) {
+async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId, hasLocalChanges) {
   if (action === "abort") {
     console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
     process.exit(0);
@@ -1082,7 +1082,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
       return;
     }
 
-    const branchAction = await askBranchMenuAction("sync");
+    const branchAction = await askBranchMenuAction(hasLocalChanges ? "sync" : "full");
 
     if (branchAction === "abort") {
       console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
@@ -1821,18 +1821,33 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   }
 
   const action = await askAfterPullAction(currentBranch);
-  if (action !== "push") {
+  if (action === "skip") {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Push skipped"));
     return;
   }
 
   try {
-    pushCurrentBranch(currentBranch);
-    console.log(chalk.green("✅ Push completed"));
+    if (action === "force-push") {
+      hardResetAndForcePush(currentBranch, remoteBranch);
+      console.log(chalk.green("✅ Hard reset and force push completed"));
+    } else {
+      pushCurrentBranch(currentBranch);
+      console.log(chalk.green("✅ Push completed"));
+    }
     await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
-    console.log(chalk.red(`❌ Push failed: ${formatGitError(error)}`));
+    console.log(chalk.red(`❌ ${action === "force-push" ? "Hard reset and force push" : "Push"} failed: ${formatGitError(error)}`));
   }
+}
+
+function hardResetAndForcePush(currentBranch, remoteBranch) {
+  console.log(
+    chalk.yellow(
+      `⚠️ Hard resetting ${currentBranch} to ${REMOTE}/${remoteBranch} and force pushing...`,
+    ),
+  );
+  execSync(`git reset --hard ${REMOTE}/${remoteBranch}`, { stdio: "inherit" });
+  execSync(`git push --force-with-lease ${REMOTE} ${currentBranch}`, { stdio: "inherit" });
 }
 
 async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, projectId) {
