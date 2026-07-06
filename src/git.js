@@ -1082,7 +1082,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
       return;
     }
 
-    const branchAction = await askBranchMenuAction();
+    const branchAction = await askBranchMenuAction("sync");
 
     if (branchAction === "abort") {
       console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
@@ -1204,19 +1204,31 @@ async function askCheckoutBranchSelection(branches) {
   return branches[selected - 1];
 }
 
-async function askBranchMenuAction() {
+async function askBranchMenuAction(context = "sync") {
   console.log();
   console.log(chalk.blue("🌿 Branches:"));
-  console.log(chalk.green("  1) New branch"));
-  console.log(chalk.green("  2) Change pull branch"));
-  console.log(chalk.green("  3) Merge branch"));
-  console.log(chalk.green("  4) Delete branch"));
-  console.log(chalk.green("  5) Abort"));
+  if (context === "sync") {
+    console.log(chalk.green("  1) Change pull branch"));
+    console.log(chalk.green("  2) Abort"));
+  } else {
+    console.log(chalk.green("  1) New branch"));
+    console.log(chalk.green("  2) Change pull branch"));
+    console.log(chalk.green("  3) Merge branch"));
+    console.log(chalk.green("  4) Delete branch"));
+    console.log(chalk.green("  5) Abort"));
+  }
 
   const answer = await askQuestion(
-    chalk.yellow("👉 Choose an option (1/2/3/4/5) [default: abort]: "),
+    context === "sync"
+      ? chalk.yellow("👉 Choose an option (1/2) [default: abort]: ")
+      : chalk.yellow("👉 Choose an option (1/2/3/4/5) [default: abort]: "),
   );
   const value = String(answer || "").trim();
+
+  if (context === "sync") {
+    if (value === "1") return "change-pull-branch";
+    return "abort";
+  }
 
   if (value === "1") return "new-branch";
   if (value === "2") return "change-pull-branch";
