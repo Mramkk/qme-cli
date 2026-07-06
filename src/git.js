@@ -1035,7 +1035,7 @@ async function runGitSync() {
 
     // With a clean working tree, always allow pull from the first menu.
   const action = await askFirstMenuAction(false, true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   return;
   }
 
@@ -1047,12 +1047,12 @@ async function runGitSync() {
   console.log(chalk.cyan(changes));
 
   const action = await askFirstMenuAction(true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id);
+  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
 }
 
 /* ================= HELPERS ================= */
 
-async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId) {
+async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId, hasLocalChanges) {
   if (action === "abort") {
     console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
     process.exit(0);
@@ -1082,7 +1082,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
       return;
     }
 
-    const branchAction = await askBranchMenuAction("sync");
+    const branchAction = await askBranchMenuAction(hasLocalChanges ? "sync" : "full");
 
     if (branchAction === "abort") {
       console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
