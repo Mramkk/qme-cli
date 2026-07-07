@@ -55,7 +55,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
             console.log(chalk.green("  0) Pull"));
             console.log(chalk.green("  1) Checkout branch"));
             console.log(chalk.green("  2) Branches"));
-            console.log(chalk.green("  3) Reset --hard to commit hash"));
+            console.log(chalk.green("  3) Reset hard"));
             console.log(chalk.green("  4) Abort"));
             rl.question(
                 chalk.yellow("👉 Choose an option (0/1/2/3/4) [default: 0]: "),
