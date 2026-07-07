@@ -1074,6 +1074,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "checkout-new-branch") {
+    await createBranchFromMenu(currentBranch);
+    return;
+  }
+
   if (action === "reset-hard-hash") {
     await resetHardToCommitHash(currentBranch);
     return;
