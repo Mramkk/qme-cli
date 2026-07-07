@@ -1074,6 +1074,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "reset-hard-hash") {
+    await resetHardToCommitHash(currentBranch);
+    return;
+  }
+
   if (action === "branches") {
     const selectedBranch = await askBranchSelectionMenu(currentBranch);
 
@@ -1123,6 +1128,37 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     const updatedBranch = await changeRemoteBranch(repoUrl, currentBranch, remoteBranch);
     await showPullMenu(updatedBranch, currentBranch, repoUrl, projectId);
     return;
+  }
+}
+
+async function resetHardToCommitHash(currentBranch) {
+  const commitHash = String(
+    await askQuestion(
+      chalk.yellow(`🔖 Enter commit hash to reset ${currentBranch} to: `),
+    ),
+  ).trim();
+
+  if (!commitHash) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
+    return;
+  }
+
+  const confirmed = await askYesNo(
+    `⚠️ This will hard reset ${currentBranch} to ${commitHash}. Continue?`,
+    false,
+  );
+
+  if (!confirmed) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
+    return;
+  }
+
+  try {
+    execSync(`git reset --hard ${commitHash}`, { stdio: "inherit" });
+    console.log(chalk.green(`✅ Hard reset complete (${commitHash})`));
+  } catch (error) {
+    console.log(chalk.red(`❌ Hard reset failed: ${formatGitError(error)}`));
+    process.exit(1);
   }
 }
 

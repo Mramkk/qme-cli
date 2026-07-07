@@ -55,9 +55,10 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
             console.log(chalk.green("  0) Pull"));
             console.log(chalk.green("  1) Checkout branch"));
             console.log(chalk.green("  2) Branches"));
-            console.log(chalk.green("  3) Abort"));
+            console.log(chalk.green("  3) Reset --hard to commit hash"));
+            console.log(chalk.green("  4) Abort"));
             rl.question(
-                chalk.yellow("👉 Choose an option (0/1/2/3) [default: 0]: "),
+                chalk.yellow("👉 Choose an option (0/1/2/3/4) [default: 0]: "),
                 answer => {
                     rl.close();
                     const value = answer.trim();
@@ -65,6 +66,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
                     if (!value || value === "0") resolve("pull");
                     else if (value === "1") resolve("checkout");
                     else if (value === "2") resolve("branches");
+                    else if (value === "3") resolve("reset-hard-hash");
                     else resolve("abort");
                 }
             );
