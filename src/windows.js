@@ -36,6 +36,25 @@ function buildXamppCommand(exeName) {
     return `cmd /c if exist "${defaultExe}" ("${defaultExe}") else (${exeName})`;
 }
 
+function resolveXamppExecutable(exeName) {
+    const configuredDir = getConfiguredXamppDir();
+    const candidates = [];
+
+    if (configuredDir) {
+        candidates.push(path.join(configuredDir, exeName));
+    }
+
+    candidates.push(path.join("C:\\xampp", exeName));
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+            return candidate;
+        }
+    }
+
+    return "";
+}
+
 function buildPostmanCommand() {
     const localAppData = process.env.LOCALAPPDATA || "";
     const programFiles = process.env.ProgramFiles || "";
@@ -274,11 +293,11 @@ const COMMANDS = {
         description: "Close apps and shut down Windows"
     },
     xamppStart: {
-        commandLine: () => buildXamppCommand("xampp_start.exe"),
+        commandLine: () => resolveXamppExecutable("xampp_start.exe") || "cmd /c exit /b 1",
         description: "Start XAMPP"
     },
     xamppStop: {
-        commandLine: () => buildXamppCommand("xampp_stop.exe"),
+        commandLine: () => resolveXamppExecutable("xampp_stop.exe") || "cmd /c exit /b 1",
         description: "Stop XAMPP"
     }
 };
@@ -510,7 +529,13 @@ function runXamppStart() {
             return;
         }
 
-        const commandLine = buildXamppCommand("xampp_start.exe");
+        const commandLine = resolveXamppExecutable("xampp_start.exe");
+        if (!commandLine) {
+            console.log(chalk.red("❌ XAMPP start executable not found"));
+            console.log(chalk.yellow("Set the XAMPP path with `qme config xampp-path <path>` or install XAMPP in `C:\\xampp`."));
+            process.exit(1);
+        }
+
         exec(commandLine, { windowsHide: false }, async error => {
             if (error) {
                 console.log(chalk.red("❌ Failed to start XAMPP"));
@@ -540,12 +565,25 @@ async function runXamppStop(options = {}) {
         process.exit(1);
     }
 
-    const commandLine = buildXamppCommand("xampp_stop.exe");
+    const apacheRunningBefore = await isWindowsProcessRunning("httpd.exe");
+    const mysqlRunningBefore = await isWindowsProcessRunning("mysqld.exe");
+    const commandLine = resolveXamppExecutable("xampp_stop.exe");
+    if (!commandLine) {
+        console.log(chalk.yellow("⚠️ XAMPP stop executable not found."));
+        console.log(chalk.yellow("If XAMPP is already stopped, there is nothing to do."));
+        console.log(chalk.yellow("Otherwise set the XAMPP path with `qme config xampp-path <path>`."));
+        return;
+    }
+
     const stopResult = await execAsync(commandLine, { windowsHide: false });
 
     if (stopResult.error) {
-        console.log(chalk.yellow("⚠️ XAMPP stop command failed or XAMPP is already stopped."));
-        console.log(chalk.yellow(stopResult.error.message));
+        if (!apacheRunningBefore && !mysqlRunningBefore) {
+            console.log(chalk.green("✅ XAMPP is already stopped"));
+        } else {
+            console.log(chalk.yellow("⚠️ XAMPP stop command failed."));
+            console.log(chalk.yellow(stopResult.error.message));
+        }
     } else {
         console.log(chalk.green("✅ Stop XAMPP"));
     }
