@@ -1132,19 +1132,72 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
 }
 
 async function resetHardToCommitHash(currentBranch) {
-  const commitHash = String(
-    await askQuestion(
-      chalk.yellow(`🔖 Enter commit hash to reset ${currentBranch} to: `),
-    ),
-  ).trim();
+  const pageSize = 20;
+  let offset = 0;
+  let selectedCommit = null;
 
-  if (!commitHash) {
-    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
-    return;
+  while (!selectedCommit) {
+    const page = getRecentCommitsPage(pageSize, offset);
+    const commits = page.commits;
+
+    if (commits.length === 0) {
+      console.log(chalk.yellow("ℹ️ No commits found"));
+      return;
+    }
+
+    const pageNumber = Math.floor(offset / pageSize) + 1;
+    const pageStartIndex = offset + 1;
+    const pageEndIndex = offset + commits.length;
+
+    console.log();
+    console.log(chalk.blue(`🧾 Select commit to hard reset ${currentBranch} to (page ${pageNumber}):`));
+    for (let i = 0; i < commits.length; i += 1) {
+      const item = commits[i];
+      console.log(
+        chalk.green(`  ${offset + i + 1}) ${item.hash} ${item.subject}`),
+      );
+    }
+    if (page.hasNext) {
+      console.log(chalk.green("  n) next"));
+    }
+    if (page.hasPrev) {
+      console.log(chalk.green("  p) previous"));
+    }
+
+    const selection = await askGitLogCommitSelection(
+      pageStartIndex,
+      pageEndIndex,
+      {
+        hasNext: page.hasNext,
+        hasPrev: page.hasPrev,
+      },
+    );
+
+    if (selection.type === "abort") {
+      console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
+      return;
+    }
+
+    if (selection.type === "next") {
+      offset += pageSize;
+      continue;
+    }
+
+    if (selection.type === "prev") {
+      offset = Math.max(0, offset - pageSize);
+      continue;
+    }
+
+    selectedCommit = commits[selection.index - pageStartIndex];
   }
 
+  console.log();
+  console.log(
+    chalk.blue(`🔄 Selected: ${selectedCommit.hash} ${selectedCommit.subject}`),
+  );
+
   const confirmed = await askYesNo(
-    `⚠️ This will hard reset ${currentBranch} to ${commitHash}. Continue?`,
+    `⚠️ This will hard reset ${currentBranch} to ${selectedCommit.hash}. Continue?`,
     false,
   );
 
@@ -1154,8 +1207,8 @@ async function resetHardToCommitHash(currentBranch) {
   }
 
   try {
-    execSync(`git reset --hard ${commitHash}`, { stdio: "inherit" });
-    console.log(chalk.green(`✅ Hard reset complete (${commitHash})`));
+    execSync(`git reset --hard ${selectedCommit.hash}`, { stdio: "inherit" });
+    console.log(chalk.green(`✅ Hard reset complete (${selectedCommit.hash})`));
   } catch (error) {
     console.log(chalk.red(`❌ Hard reset failed: ${formatGitError(error)}`));
     process.exit(1);
