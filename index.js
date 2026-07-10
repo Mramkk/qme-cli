@@ -509,7 +509,7 @@ function runPilot() {
   console.log();
 }
 
-function runProjectList() {
+async function runProjectList() {
   const projects = getSavedProjects();
   const currentPhpVersionInfo = normalizePhpVersionParts(getXamppCurrentVersion());
   const phpProjectTypes = new Set([
@@ -562,6 +562,23 @@ function runProjectList() {
       const updatedValue = updatedAt ? ` ${updatedAt}` : "";
       console.log(chalk.green(`  ${index + 1}) ${projectName} ( ${project.type} |${updatedValue} )`));
     }
+  });
+
+  console.log();
+  const answer = await askQuestion(
+    chalk.yellow(`👉 Select project to open (1/${visibleProjects.length}) [Enter to abort]: `),
+  );
+  const selected = Number.parseInt(answer, 10);
+
+  if (!Number.isInteger(selected) || selected < 1 || selected > visibleProjects.length) {
+    console.log(chalk.gray("⏹️".padEnd(4, " ") + "Project open aborted"));
+    console.log();
+    return;
+  }
+
+  const selectedProject = visibleProjects[selected - 1];
+  tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
+    newWindow: true,
   });
   console.log();
 }
