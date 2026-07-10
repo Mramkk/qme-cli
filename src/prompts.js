@@ -53,22 +53,24 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
 
         if (allowPull) {
             console.log(chalk.green("  0) Pull"));
-            console.log(chalk.green("  1) Checkout new branch"));
-            console.log(chalk.green("  2) Checkout branch"));
-            console.log(chalk.green("  3) Branches"));
-            console.log(chalk.green("  4) Reset hard"));
-            console.log(chalk.green("  5) Abort"));
+            console.log(chalk.green("  1) Change pull branch"));
+            console.log(chalk.green("  2) Checkout new branch"));
+            console.log(chalk.green("  3) Checkout branch"));
+            console.log(chalk.green("  4) Branches"));
+            console.log(chalk.green("  5) Reset hard"));
+            console.log(chalk.green("  6) Abort"));
             rl.question(
-                chalk.yellow("👉 Choose an option (0/1/2/3/4/5) [default: 0]: "),
+                chalk.yellow("👉 Choose an option (0/1/2/3/4/5/6) [default: 0]: "),
                 answer => {
                     rl.close();
                     const value = answer.trim();
 
                     if (!value || value === "0") resolve("pull");
-                    else if (value === "1") resolve("checkout-new-branch");
-                    else if (value === "2") resolve("checkout");
-                    else if (value === "3") resolve("branches");
-                    else if (value === "4") resolve("reset-hard-hash");
+                    else if (value === "1") resolve("change-pull-branch");
+                    else if (value === "2") resolve("checkout-new-branch");
+                    else if (value === "3") resolve("checkout");
+                    else if (value === "4") resolve("branches");
+                    else if (value === "5") resolve("reset-hard-hash");
                     else resolve("abort");
                 }
             );
