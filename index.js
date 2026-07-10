@@ -492,6 +492,9 @@ async function runWorkspace() {
     const dbHost = String(info.envValues.DB_HOST || "127.0.0.1").trim() || "127.0.0.1";
     const dbPort = Number.parseInt(info.envValues.DB_PORT || "3306", 10) || 3306;
 
+    console.log(chalk.cyan("Checking existing Apache/MySQL services..."));
+    await runXamppStopByPlatform();
+
     console.log(chalk.cyan("Starting XAMPP first..."));
     runXamppStartByPlatform();
 
@@ -1294,14 +1297,14 @@ function runXamppStartByPlatform() {
   process.exit(1);
 }
 
-function runXamppStopByPlatform() {
+async function runXamppStopByPlatform() {
   if (process.platform === "darwin") {
-    runMacXamppStop();
+    await runMacXamppStop();
     return;
   }
 
   if (process.platform === "win32") {
-    runXamppStop();
+    await runXamppStop();
     return;
   }
 
@@ -2901,7 +2904,7 @@ async function main() {
   }
 
   if (args[0] === "xstop") {
-    runXamppStopByPlatform();
+    await runXamppStopByPlatform();
     return;
   }
 
@@ -2916,7 +2919,7 @@ async function main() {
   }
 
   if (args[0] === "xampp" && args[1] === "stop") {
-    runXamppStopByPlatform();
+    await runXamppStopByPlatform();
     return;
   }
 
