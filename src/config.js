@@ -11,7 +11,7 @@ const DEFAULT_BRANCH = "main";
 
 function loadRawConfig() {
     if (!fs.existsSync(CONFIG_PATH)) {
-        return { repos: {}, system: { aliases: {} } };
+        return { repos: {}, system: { aliases: {}, projects: [] } };
     }
 
     const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
@@ -26,6 +26,9 @@ function loadRawConfig() {
 
     if (!parsed.system.aliases || typeof parsed.system.aliases !== "object" || Array.isArray(parsed.system.aliases)) {
         parsed.system.aliases = {};
+    }
+    if (!Array.isArray(parsed.system.projects)) {
+        parsed.system.projects = [];
     }
     return parsed;
 }
@@ -44,10 +47,101 @@ function getConfigPath() {
 
 function ensureConfigFile() {
     if (!fs.existsSync(CONFIG_PATH)) {
-        saveRawConfig({ repos: {}, system: { aliases: {} } });
+        saveRawConfig({ repos: {}, system: { aliases: {}, projects: [] } });
     }
 
     return CONFIG_PATH;
+}
+
+function setLastRunProject(project) {
+    const config = loadRawConfig();
+    if (!config.system) {
+        config.system = {};
+    }
+
+    const projectPath = String(project?.path || "").trim();
+    const projectType = String(project?.type || "").trim();
+    const phpVersion = String(project?.phpVersion || "").trim();
+    const laravelVersion = String(project?.laravelVersion || "").trim();
+
+    if (!projectPath || !projectType) {
+        return false;
+    }
+
+    const nextProject = {
+        path: projectPath,
+        type: projectType,
+        updatedAt: new Date().toISOString(),
+    };
+
+    if (phpVersion) {
+        nextProject.phpVersion = phpVersion;
+    }
+
+    if (laravelVersion) {
+        nextProject.laravelVersion = laravelVersion;
+    }
+
+    const projects = Array.isArray(config.system.projects) ? config.system.projects : [];
+    const normalizedProjects = projects.filter((item) => item && typeof item === "object");
+    const existingIndex = normalizedProjects.findIndex(
+        (item) => String(item.path || "").trim().toLowerCase() === projectPath.toLowerCase(),
+    );
+
+    if (existingIndex >= 0) {
+        normalizedProjects[existingIndex] = nextProject;
+    } else {
+        normalizedProjects.push(nextProject);
+    }
+
+    config.system.projects = normalizedProjects;
+    saveRawConfig(config);
+    return true;
+}
+
+function getLastRunProject() {
+    const config = loadRawConfig();
+    const projects = config.system && Array.isArray(config.system.projects)
+        ? config.system.projects
+        : [];
+
+    if (!projects.length) {
+        const legacyProject = config.system && config.system.lastRunProject;
+        if (!legacyProject || typeof legacyProject !== "object") {
+            return null;
+        }
+
+        const legacyPath = String(legacyProject.path || "").trim();
+        const legacyType = String(legacyProject.type || "").trim();
+        if (!legacyPath || !legacyType) {
+            return null;
+        }
+
+        return {
+            path: legacyPath,
+            type: legacyType,
+            updatedAt: String(legacyProject.updatedAt || "").trim(),
+        };
+    }
+
+    const project = projects[projects.length - 1];
+
+    if (!project || typeof project !== "object") {
+        return null;
+    }
+
+    const projectPath = String(project.path || "").trim();
+    const projectType = String(project.type || "").trim();
+
+    if (!projectPath || !projectType) {
+        return null;
+    }
+
+    return {
+        path: projectPath,
+        type: projectType,
+        updatedAt: String(project.updatedAt || "").trim(),
+    };
 }
 
 function loadOrCreateRepoConfig(repoUrl) {
@@ -397,6 +491,8 @@ function removeAlias(name) {
 module.exports = {
     getConfigPath,
     ensureConfigFile,
+    setLastRunProject,
+    getLastRunProject,
     getAliases,
     addOrUpdateAlias,
     removeAlias,

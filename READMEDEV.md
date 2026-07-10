@@ -75,6 +75,7 @@ qme alias remove gs
 - `qme run` starts the detected project type when possible.
 - `qme open <url>` opens a URL or local target.
 - `qme alias` lets you create custom shortcuts in qme config.
+- `qme run` stores successful workspaces in `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`.
 
 ### Flutter
 

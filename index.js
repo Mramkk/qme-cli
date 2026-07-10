@@ -21,6 +21,7 @@ const {
   exportConfig,
   setRemoteBranchForRepo,
   setProjectIdForRepo,
+  setLastRunProject,
   setXamppPath,
   clearXamppPath,
   getXamppPath,
@@ -244,6 +245,66 @@ function detectProjectProfile(baseDir) {
   return "unknown";
 }
 
+function getProjectTypeLabel(profile) {
+  const value = String(profile || "").trim().toLowerCase();
+
+  if (value === "laravel") return "laravel";
+  if (value === "flutter") return "flutter";
+  if (value === "next") return "next";
+  if (value === "react") return "react";
+  if (value === "vite") return "vite";
+  if (value === "node") return "node";
+
+  return "unknown";
+}
+
+function getPhpVersion(baseDir) {
+  try {
+    const result = spawnSync("php", ["-v"], {
+      cwd: baseDir,
+      encoding: "utf8",
+      windowsHide: true,
+      shell: process.platform === "win32",
+    });
+
+    if (result.error || result.status !== 0) {
+      return "";
+    }
+
+    const output = String(result.stdout || "").trim();
+    const firstLine = output.split(/\r?\n/)[0] || "";
+    const match = firstLine.match(/PHP\s+([0-9]+\.[0-9]+\.[0-9]+(?:-[^\s]+)?)/i);
+    if (match && match[1]) {
+      return match[1];
+    }
+
+    const fallback = spawnSync("php", ["-r", "echo PHP_VERSION;"], {
+      cwd: baseDir,
+      encoding: "utf8",
+      windowsHide: true,
+      shell: process.platform === "win32",
+    });
+
+    if (fallback.error || fallback.status !== 0) {
+      return "";
+    }
+
+    return String(fallback.stdout || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function getLaravelVersion(baseDir) {
+  try {
+    const composer = safeReadJson(path.join(baseDir, "composer.json"));
+    const version = String(composer?.require?.["laravel/framework"] || "").trim();
+    return version;
+  } catch {
+    return "";
+  }
+}
+
 function getNodePackageManager(baseDir) {
   if (hasFile(baseDir, "pnpm-lock.yaml")) return "pnpm";
   if (hasFile(baseDir, "yarn.lock")) return "yarn";
@@ -416,11 +477,14 @@ function runPilot() {
 async function runWorkspace() {
   const baseDir = process.cwd();
   const info = inspectRunEnvironment(baseDir);
+  const projectType = getProjectTypeLabel(info.profile);
+  const phpVersion = info.profile === "laravel" ? getPhpVersion(baseDir) : "";
+  const laravelVersion = info.profile === "laravel" ? getLaravelVersion(baseDir) : "";
 
   console.log();
   console.log(chalk.blueBright("qme run"));
   console.log(chalk.gray(`Workspace: ${baseDir}`));
-  console.log(chalk.green(`Detected: ${info.profile}`));
+  console.log(chalk.green(`Detected: ${projectType}`));
   printRunChecklist(info.checks);
 
   if (info.profile === "laravel") {
@@ -443,12 +507,19 @@ async function runWorkspace() {
     }
 
     console.log(chalk.cyan("Starting Laravel server..."));
+    setLastRunProject({
+      path: baseDir,
+      type: projectType,
+      phpVersion,
+      laravelVersion,
+    });
     runCommandInDir("php", ["artisan", "serve"], baseDir);
     return;
   }
 
   if (info.profile === "flutter") {
     console.log(chalk.cyan("Starting Flutter app..."));
+    setLastRunProject({ path: baseDir, type: projectType });
     runCommandInDir("flutter", ["run"], baseDir);
     return;
   }
@@ -463,12 +534,14 @@ async function runWorkspace() {
     const scripts = info.pkg?.scripts || {};
     if (scripts.dev) {
       console.log(chalk.cyan(`Running ${manager} run dev...`));
+      setLastRunProject({ path: baseDir, type: projectType });
       runCommandInDir(manager, ["run", "dev"], baseDir);
       return;
     }
 
     if (scripts.start) {
       console.log(chalk.cyan(`Running ${manager} run start...`));
+      setLastRunProject({ path: baseDir, type: projectType });
       runCommandInDir(manager, ["run", "start"], baseDir);
       return;
     }

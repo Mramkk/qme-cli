@@ -99,6 +99,8 @@ qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
 qme config
 ```
 
+`qme run` stores successful workspaces in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
+
 10. `qme config branch <branch-name>`
    Stores pull branch for current repo in qme config.
 
