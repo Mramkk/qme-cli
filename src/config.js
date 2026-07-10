@@ -144,6 +144,36 @@ function getLastRunProject() {
     };
 }
 
+function getSavedProjects() {
+    const config = loadRawConfig();
+    const projects = config.system && Array.isArray(config.system.projects)
+        ? config.system.projects
+        : [];
+
+    return projects
+        .filter((project) => project && typeof project === "object")
+        .map((project) => {
+            const pathValue = String(project.path || "").trim();
+            const typeValue = String(project.type || "").trim();
+            const updatedAtValue = String(project.updatedAt || "").trim();
+            const phpVersionValue = String(project.phpVersion || "").trim();
+            const laravelVersionValue = String(project.laravelVersion || "").trim();
+
+            if (!pathValue || !typeValue) {
+                return null;
+            }
+
+            return {
+                path: pathValue,
+                type: typeValue,
+                updatedAt: updatedAtValue,
+                phpVersion: phpVersionValue,
+                laravelVersion: laravelVersionValue,
+            };
+        })
+        .filter(Boolean);
+}
+
 function loadOrCreateRepoConfig(repoUrl) {
     const config = loadRawConfig();
 
@@ -493,6 +523,7 @@ module.exports = {
     ensureConfigFile,
     setLastRunProject,
     getLastRunProject,
+    getSavedProjects,
     getAliases,
     addOrUpdateAlias,
     removeAlias,

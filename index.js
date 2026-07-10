@@ -22,6 +22,7 @@ const {
   setRemoteBranchForRepo,
   setProjectIdForRepo,
   setLastRunProject,
+  getSavedProjects,
   setXamppPath,
   clearXamppPath,
   getXamppPath,
@@ -101,6 +102,8 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
+  console.log(chalk.green("  qme proj"));
+  console.log(chalk.gray("  Lists saved projects from qme config"));
   console.log(chalk.green("  qme open <url>"));
   console.log(chalk.green("  qme pem -f <path-to-pem>"));
   console.log(
@@ -196,6 +199,38 @@ function formatShortDate(date = new Date()) {
 
 function formatMonthName(date = new Date()) {
   return date.toLocaleString("en-US", { month: "long" });
+}
+
+function formatDateOnly(value) {
+  const text = String(value || "").trim();
+  if (!text) {
+    return "";
+  }
+
+  return text.split("T")[0] || text;
+}
+
+function formatShortDateOnly(value) {
+  const isoDate = formatDateOnly(value);
+  if (!isoDate) {
+    return "";
+  }
+
+  const parts = isoDate.split("-");
+  if (parts.length !== 3) {
+    return isoDate;
+  }
+
+  return `${parts[2]}-${parts[1]}-${parts[0].slice(-2)}`;
+}
+
+function normalizePhpVersionParts(version) {
+  const value = normalizeXamppVersion(version);
+  const parts = value.split(".").filter(Boolean);
+  return {
+    value,
+    majorMinor: parts.length >= 2 ? `${parts[0]}.${parts[1]}` : value,
+  };
 }
 
 function safeReadJson(filePath) {
@@ -471,6 +506,63 @@ function runPilot() {
   if (info.nextStep) {
     console.log(chalk.cyan(`Suggested start: ${info.nextStep}`));
   }
+  console.log();
+}
+
+function runProjectList() {
+  const projects = getSavedProjects();
+  const currentPhpVersionInfo = normalizePhpVersionParts(getXamppCurrentVersion());
+  const phpProjectTypes = new Set([
+    "laravel",
+    "php",
+    "symfony",
+    "wordpress",
+    "codeigniter",
+    "yii",
+    "cakephp",
+    "magento",
+  ]);
+  const visibleProjects = projects.filter((project) => {
+    const type = String(project.type || "").toLowerCase();
+    const savedPhpVersionInfo = normalizePhpVersionParts(project.phpVersion);
+    const isPhpProject = phpProjectTypes.has(type) || Boolean(savedPhpVersionInfo.value);
+
+    if (!isPhpProject) {
+      return true;
+    }
+
+    if (!currentPhpVersionInfo.value) {
+      return false;
+    }
+
+    return (
+      savedPhpVersionInfo.value === currentPhpVersionInfo.value ||
+      savedPhpVersionInfo.majorMinor === currentPhpVersionInfo.majorMinor
+    );
+  });
+
+  if (!visibleProjects.length) {
+    console.log(chalk.yellow("ℹ️ No saved projects found in config"));
+    console.log();
+    return;
+  }
+
+  console.log(chalk.blueBright("Projects:"));
+  visibleProjects.forEach((project, index) => {
+    const isLaravel = String(project.type || "").toLowerCase() === "laravel";
+    const updatedAt = formatShortDateOnly(project.updatedAt);
+    const projectName = path.basename(project.path.replace(/[\\/]+$/, ""));
+
+    if (isLaravel) {
+      const phpValue = project.phpVersion ? `php: ${project.phpVersion}` : "";
+      const laravelValue = project.laravelVersion ? `laravel: ${project.laravelVersion}` : "";
+      const updatedValue = updatedAt ? updatedAt : "";
+      console.log(chalk.green(`  ${index + 1}) ${projectName} ( ${[phpValue, laravelValue, updatedValue].filter(Boolean).join(" | ")} )`));
+    } else if (project.type) {
+      const updatedValue = updatedAt ? ` ${updatedAt}` : "";
+      console.log(chalk.green(`  ${index + 1}) ${projectName} ( ${project.type} |${updatedValue} )`));
+    }
+  });
   console.log();
 }
 
@@ -2680,6 +2772,11 @@ async function main() {
 
   if (args[0] === "run") {
     await runWorkspace();
+    return;
+  }
+
+  if (args[0] === "proj") {
+    runProjectList();
     return;
   }
 
