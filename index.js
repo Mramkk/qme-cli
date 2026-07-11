@@ -225,7 +225,9 @@ function formatShortDateOnly(value) {
 }
 
 function normalizePhpVersionParts(version) {
-  const value = normalizeXamppVersion(version);
+  const rawValue = normalizeXamppVersion(version);
+  const match = rawValue.match(/(\d+)\.(\d+)(?:\.\d+)?/);
+  const value = match ? match[0] : rawValue;
   const parts = value.split(".").filter(Boolean);
   return {
     value,
