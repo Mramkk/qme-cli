@@ -141,13 +141,25 @@ function askAfterPullAction(currentBranch) {
 
         console.log();
         rl.question(
-            chalk.yellow("⬆️".padEnd(4, " ") + `Do you want to push current branch (${currentBranch})? (y/N): `),
+            chalk.yellow(
+                "⬆️".padEnd(4, " ") +
+                `Do you want to push current branch (${currentBranch})? (Enter=push, f=force push, s=skip): `
+            ),
             answer => {
                 rl.close();
                 const value = answer.trim().toLowerCase();
 
-                if (value === "y" || value === "yes") resolve("push");
-                else resolve("skip");
+                if (!value || value === "y" || value === "yes" || value === "push" || value === "1") {
+                    resolve("push");
+                    return;
+                }
+
+                if (value === "f" || value === "force" || value === "force-push" || value === "2") {
+                    resolve("force-push");
+                    return;
+                }
+
+                resolve("skip");
             }
         );
     });
