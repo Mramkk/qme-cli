@@ -56,9 +56,9 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
             console.log(chalk.green("  1) Change pull branch"));
             console.log(chalk.green("  2) Checkout new branch"));
             console.log(chalk.green("  3) Checkout branch"));
-            console.log(chalk.green("  4) Merge branch"));
-            console.log(chalk.green("  5) Delete branch"));
-            console.log(chalk.green("  6) Reset hard"));
+            console.log(chalk.green("  4) Reset hard"));
+            console.log(chalk.green("  5) Merge branch"));
+            console.log(chalk.green("  6) Delete branch"));
             console.log(chalk.green("  7) Abort"));
             rl.question(
                 chalk.yellow("👉 Choose an option (0/1/2/3/4/5/6/7) [default: 0]: "),
@@ -70,9 +70,9 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
                     else if (value === "1") resolve("change-pull-branch");
                     else if (value === "2") resolve("checkout-new-branch");
                     else if (value === "3") resolve("checkout");
-                    else if (value === "4") resolve("merge-branch");
-                    else if (value === "5") resolve("delete-branch");
-                    else if (value === "6") resolve("reset-hard-hash");
+                    else if (value === "4") resolve("reset-hard-hash");
+                    else if (value === "5") resolve("merge-branch");
+                    else if (value === "6") resolve("delete-branch");
                     else resolve("abort");
                 }
             );
