@@ -116,12 +116,13 @@ export function askAfterPullAction(currentBranch: string): Promise<string> {
         console.log();
         console.log(chalk.green("  1) Push"));
         console.log(chalk.green("  2) Force push"));
-        rl.question(chalk.yellow("👉 Choose an option (1/2) [default: 1]: "), (choice) => {
+        console.log(chalk.green("  3) Abort"));
+        rl.question(chalk.yellow("👉 Choose an option (1/2/3) [default: 1]: "), (choice) => {
           rl.close();
           const selected = choice.trim();
           if (!selected || selected === "1") resolve("push");
           else if (selected === "2") resolve("force-push");
-          else resolve("push");
+          else resolve("abort");
         });
         return;
       }
@@ -196,4 +197,3 @@ export const askGitLogCommitSelection = async () => "";
 export const askResetModeForCommit = async () => "";
 export const askSshEmail = async () => "";
 export const askSshTag = async () => "";
-
