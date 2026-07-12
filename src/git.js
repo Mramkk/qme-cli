@@ -1079,45 +1079,19 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
-  if (action === "reset-hard-hash") {
-    await resetHardToCommitHash(currentBranch);
+  if (action === "merge-branch") {
+    await mergeBranchFromMenu(currentBranch);
     return;
   }
 
-  if (action === "branches") {
-    const selectedBranch = await askBranchSelectionMenu(currentBranch);
+  if (action === "delete-branch") {
+    await deleteBranchFromMenu(currentBranch);
+    return;
+  }
 
-    if (!selectedBranch) {
-      console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
-      return;
-    }
-
-    const branchAction = await askBranchMenuAction(hasLocalChanges ? "sync" : "full");
-
-    if (branchAction === "abort") {
-      console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
-      return;
-    }
-
-    if (branchAction === "new-branch") {
-      await createBranchFromMenu(currentBranch);
-      return;
-    }
-
-    if (branchAction === "change-pull-branch") {
-      changePullBranchToSelectedBranch(repoUrl, currentBranch, selectedBranch);
-      return;
-    }
-
-    if (branchAction === "merge-branch") {
-      await mergeBranchFromMenu(selectedBranch.name);
-      return;
-    }
-
-    if (branchAction === "delete-branch") {
-      await deleteBranchFromMenu(selectedBranch.name);
-      return;
-    }
+  if (action === "reset-hard-hash") {
+    await resetHardToCommitHash(currentBranch);
+    return;
   }
 
   if (action === "commit") {
@@ -1296,39 +1270,6 @@ async function askCheckoutBranchSelection(branches) {
   }
 
   return branches[selected - 1];
-}
-
-async function askBranchMenuAction(context = "sync") {
-  console.log();
-  console.log(chalk.blue("🌿 Branches:"));
-  if (context === "sync") {
-    console.log(chalk.green("  1) Change pull branch"));
-    console.log(chalk.green("  2) Abort"));
-  } else {
-    console.log(chalk.green("  1) New branch"));
-    console.log(chalk.green("  2) Change pull branch"));
-    console.log(chalk.green("  3) Merge branch"));
-    console.log(chalk.green("  4) Delete branch"));
-    console.log(chalk.green("  5) Abort"));
-  }
-
-  const answer = await askQuestion(
-    context === "sync"
-      ? chalk.yellow("👉 Choose an option (1/2) [default: abort]: ")
-      : chalk.yellow("👉 Choose an option (1/2/3/4/5) [default: abort]: "),
-  );
-  const value = String(answer || "").trim();
-
-  if (context === "sync") {
-    if (value === "1") return "change-pull-branch";
-    return "abort";
-  }
-
-  if (value === "1") return "new-branch";
-  if (value === "2") return "change-pull-branch";
-  if (value === "3") return "merge-branch";
-  if (value === "4") return "delete-branch";
-  return "abort";
 }
 
 async function askBranchSelectionMenu(currentBranch) {
