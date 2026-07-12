@@ -148,31 +148,32 @@ function askAfterPullAction(currentBranch) {
             answer => {
                 const value = answer.trim().toLowerCase();
 
-                if (value === "y" || value === "yes") {
-                    console.log();
-                    console.log(chalk.green("  1) Push"));
-                    console.log(chalk.green("  2) Force push"));
-                    rl.question(
-                        chalk.yellow("👉 Choose an option (1/2) [default: 1]: "),
-                        choice => {
-                            rl.close();
-                            const selected = choice.trim();
+        if (value === "y" || value === "yes") {
+            console.log();
+            console.log(chalk.green("  1) Push"));
+            console.log(chalk.green("  2) Force push"));
+            console.log(chalk.green("  3) Abort"));
+            rl.question(
+                chalk.yellow("👉 Choose an option (1/2/3) [default: 1]: "),
+                choice => {
+                    rl.close();
+                    const selected = choice.trim();
 
-                            if (!selected || selected === "1") {
+                    if (!selected || selected === "1") {
                                 resolve("push");
                                 return;
                             }
 
-                            if (selected === "2") {
-                                resolve("force-push");
-                                return;
-                            }
+                    if (selected === "2") {
+                        resolve("force-push");
+                        return;
+                    }
 
-                            resolve("push");
-                        }
-                    );
-                    return;
+                    resolve("abort");
                 }
+            );
+            return;
+        }
 
                 resolve("skip");
             }
