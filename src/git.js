@@ -1858,6 +1858,7 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askAfterPullAction(currentBranch);
   if (action === "skip") {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Push skipped"));
+    process.exit(0);
     return;
   }
 
