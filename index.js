@@ -235,6 +235,16 @@ function normalizePhpVersionParts(version) {
   };
 }
 
+function getXamppSwitchVersionCandidate(version) {
+  const normalized = normalizeXamppVersion(version);
+  if (!normalized) {
+    return "";
+  }
+
+  const parts = normalizePhpVersionParts(normalized);
+  return parts.majorMinor || parts.value || normalized;
+}
+
 function safeReadJson(filePath) {
   try {
     if (!fs.existsSync(filePath)) {
@@ -363,6 +373,229 @@ function runCommandInDir(command, args, cwd) {
 
   if (typeof result.status === "number" && result.status !== 0) {
     process.exit(result.status);
+  }
+
+  return true;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isProcessRunningOnWindows(imageName) {
+  if (process.platform !== "win32") {
+    return false;
+  }
+
+  const result = spawnSync("tasklist", ["/FI", `IMAGENAME eq ${imageName}`], {
+    encoding: "utf8",
+    windowsHide: true,
+    shell: true,
+  });
+
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`.toLowerCase();
+  return output.includes(String(imageName || "").toLowerCase());
+}
+
+async function waitForWindowsProcesses(imageNames, timeoutMs = 45000, pollMs = 1500) {
+  const targets = Array.from(new Set(imageNames.filter(Boolean)));
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (targets.every((imageName) => isProcessRunningOnWindows(imageName))) {
+      return true;
+    }
+
+    await sleep(pollMs);
+  }
+
+  return false;
+}
+
+async function isXamppRunningByPlatform() {
+  if (process.platform === "win32") {
+    return isProcessRunningOnWindows("httpd.exe") || isProcessRunningOnWindows("mysqld.exe");
+  }
+
+  if (process.platform === "darwin") {
+    const result = spawnSync("pgrep", ["-f", "xampp"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    return result.status === 0;
+  }
+
+  return false;
+}
+
+async function waitForXamppReadyByPlatform() {
+  if (process.platform === "win32") {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < 60000) {
+      for (const port of [80, 8080]) {
+        if (await waitForTcpPort("127.0.0.1", port, 500, 100)) {
+          return true;
+        }
+      }
+
+      await sleep(1500);
+    }
+
+    return false;
+  }
+
+  if (process.platform === "darwin") {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < 45000) {
+      if (await isXamppRunningByPlatform()) {
+        return true;
+      }
+
+      await sleep(1500);
+    }
+
+    return false;
+  }
+
+  return true;
+}
+
+async function waitForXamppStoppedByPlatform() {
+  if (process.platform === "win32") {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < 45000) {
+      const apacheRunning = isProcessRunningOnWindows("httpd.exe");
+      const mysqlRunning = isProcessRunningOnWindows("mysqld.exe");
+
+      if (!apacheRunning && !mysqlRunning) {
+        return true;
+      }
+
+      await sleep(1500);
+    }
+
+    return false;
+  }
+
+  if (process.platform === "darwin") {
+    return true;
+  }
+
+  return true;
+}
+
+async function closeVsCodeForXamppSwitch() {
+  if (process.platform !== "win32") {
+    return;
+  }
+
+  try {
+    console.log(chalk.cyan("Closing VS Code before switching XAMPP..."));
+    execSync('cmd /c taskkill /F /T /IM code.exe', {
+      stdio: "inherit",
+      windowsHide: false,
+    });
+    console.log(chalk.green("✅ Closed VS Code"));
+  } catch {
+    console.log(chalk.yellow("⚠️ VS Code was not running or could not be closed automatically"));
+  }
+}
+
+async function forceCloseXamppLockers() {
+  if (process.platform !== "win32") {
+    return;
+  }
+
+  const processNames = [
+    "httpd.exe",
+    "mysqld.exe",
+    "php.exe",
+    "xampp-control.exe",
+    "filezilla.exe",
+    "mercury.exe",
+    "xampp-shell.exe",
+  ];
+
+  const result = spawnSync(
+    "taskkill",
+    ["/F", "/T", ...processNames.flatMap((name) => ["/IM", name])],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+    },
+  );
+
+  if (result.error) {
+    console.log(
+      chalk.yellow(
+        `⚠️ Could not force-close XAMPP helper processes: ${result.error.message}`,
+      ),
+    );
+    return;
+  }
+
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`.trim();
+  if (output) {
+    console.log(chalk.gray(output));
+  }
+}
+
+async function renameFolderWithRetry(fromPath, toPath, label, attempts = 5, delayMs = 400) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      fs.renameSync(fromPath, toPath);
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = String(error.code || "").toUpperCase();
+
+      if (!["EPERM", "EBUSY"].includes(code) || attempt === attempts) {
+        throw error;
+      }
+
+      console.log(
+        chalk.yellow(
+          `⚠️ Retry ${attempt}/${attempts} failed while moving ${label}: ${error.message}`,
+        ),
+      );
+      await sleep(delayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
+async function prepareXamppForLaravelProject(selectedProject) {
+  const selectedPhpVersion = getXamppSwitchVersionCandidate(selectedProject.phpVersion);
+
+  const xamppRunning = await isXamppRunningByPlatform();
+  if (xamppRunning) {
+    console.log(
+      chalk.cyan(
+        "Stopping XAMPP before switching versions...",
+      ),
+    );
+    await runXamppStopByPlatform();
+  }
+
+  if (selectedPhpVersion) {
+    console.log(chalk.cyan(`Switching XAMPP to PHP ${selectedPhpVersion}...`));
+    await runXamppSwitch(selectedPhpVersion);
+  } else {
+    console.log(chalk.cyan("Starting XAMPP..."));
+    runXamppStartByPlatform();
+  }
+
+  console.log(chalk.cyan("Waiting for XAMPP to become ready..."));
+  const ready = await waitForXamppReadyByPlatform();
+  if (!ready) {
+    console.log(chalk.red("❌ XAMPP did not become ready in time"));
+    console.log(chalk.yellow("Please start XAMPP manually, then try opening the project again."));
+    return false;
   }
 
   return true;
@@ -513,44 +746,14 @@ function runPilot() {
 
 async function runProjectList() {
   const projects = getSavedProjects();
-  const currentPhpVersionInfo = normalizePhpVersionParts(getXamppCurrentVersion());
-  const phpProjectTypes = new Set([
-    "laravel",
-    "php",
-    "symfony",
-    "wordpress",
-    "codeigniter",
-    "yii",
-    "cakephp",
-    "magento",
-  ]);
-  const visibleProjects = projects.filter((project) => {
-    const type = String(project.type || "").toLowerCase();
-    const savedPhpVersionInfo = normalizePhpVersionParts(project.phpVersion);
-    const isPhpProject = phpProjectTypes.has(type) || Boolean(savedPhpVersionInfo.value);
-
-    if (!isPhpProject) {
-      return true;
-    }
-
-    if (!currentPhpVersionInfo.value) {
-      return false;
-    }
-
-    return (
-      savedPhpVersionInfo.value === currentPhpVersionInfo.value ||
-      savedPhpVersionInfo.majorMinor === currentPhpVersionInfo.majorMinor
-    );
-  });
-
-  if (!visibleProjects.length) {
+  if (!projects.length) {
     console.log(chalk.yellow("ℹ️ No saved projects found in config"));
     console.log();
     return;
   }
 
   console.log(chalk.blueBright("Projects:"));
-  visibleProjects.forEach((project, index) => {
+  projects.forEach((project, index) => {
     const isLaravel = String(project.type || "").toLowerCase() === "laravel";
     const updatedAt = formatShortDateOnly(project.updatedAt);
     const projectName = path.basename(project.path.replace(/[\\/]+$/, ""));
@@ -568,17 +771,25 @@ async function runProjectList() {
 
   console.log();
   const answer = await askQuestion(
-    chalk.yellow(`👉 Select project to open (1/${visibleProjects.length}) [Enter to abort]: `),
+    chalk.yellow(`👉 Select project to open (1/${projects.length}) [Enter to abort]: `),
   );
   const selected = Number.parseInt(answer, 10);
 
-  if (!Number.isInteger(selected) || selected < 1 || selected > visibleProjects.length) {
+  if (!Number.isInteger(selected) || selected < 1 || selected > projects.length) {
     console.log(chalk.gray("⏹️".padEnd(4, " ") + "Project open aborted"));
     console.log();
     return;
   }
 
-  const selectedProject = visibleProjects[selected - 1];
+  const selectedProject = projects[selected - 1];
+  if (String(selectedProject.type || "").toLowerCase() === "laravel") {
+    const xamppReady = await prepareXamppForLaravelProject(selectedProject);
+    if (!xamppReady) {
+      console.log();
+      return;
+    }
+  }
+
   tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
     newWindow: true,
   });
@@ -603,19 +814,13 @@ async function runWorkspace() {
     const dbHost = String(info.envValues.DB_HOST || "127.0.0.1").trim() || "127.0.0.1";
     const dbPort = Number.parseInt(info.envValues.DB_PORT || "3306", 10) || 3306;
 
-    console.log(chalk.cyan("Checking existing Apache/MySQL services..."));
-    await runXamppStopByPlatform();
-
-    console.log(chalk.cyan("Starting XAMPP first..."));
-    runXamppStartByPlatform();
-
     if (dbConnection === "mysql") {
       console.log(chalk.cyan(`Waiting for database ${dbHost}:${dbPort}...`));
       const dbReady = await waitForTcpPort(dbHost, dbPort, 45000, 1500);
       if (!dbReady) {
         console.log(chalk.red("❌ Database is not reachable yet"));
         console.log(chalk.yellow(`Expected MySQL on ${dbHost}:${dbPort}`));
-        console.log(chalk.yellow("Start MySQL in XAMPP, or fix DB_HOST / DB_PORT in .env"));
+        console.log(chalk.yellow("Start MySQL separately, or fix DB_HOST / DB_PORT in .env"));
         return;
       }
     }
@@ -1276,7 +1481,7 @@ async function runXamppSwitch(requestedVersionRaw) {
   }
 
   const xamppRoot = getXamppPath() || "D:\\xampp";
-  const currentVersion = normalizeXamppVersion(getXamppCurrentVersion());
+  const currentVersion = getXamppSwitchVersionCandidate(getXamppCurrentVersion());
   if (!currentVersion) {
     console.log(chalk.red("❌ XAMPP current version is not set"));
     console.log(chalk.yellow("Set it first: qme config xampp-v <version>"));
@@ -1289,9 +1494,19 @@ async function runXamppSwitch(requestedVersionRaw) {
   }
 
   const baseDir = path.dirname(xamppRoot);
-  let requestedVersion = normalizeXamppVersion(requestedVersionRaw);
+  const requestedVersionCandidates = [];
+  const normalizedRequested = normalizeXamppVersion(requestedVersionRaw);
+  if (normalizedRequested) {
+    requestedVersionCandidates.push(normalizedRequested);
+    const phpParts = normalizePhpVersionParts(normalizedRequested);
+    if (phpParts.majorMinor && phpParts.majorMinor !== normalizedRequested) {
+      requestedVersionCandidates.push(phpParts.majorMinor);
+    }
+  }
 
-  if (!requestedVersion) {
+  let requestedVersion = "";
+
+  if (requestedVersionCandidates.length === 0) {
     const availableVersions = getAvailableXamppVersions(
       baseDir,
       currentVersion,
@@ -1331,11 +1546,22 @@ async function runXamppSwitch(requestedVersionRaw) {
     }
 
     requestedVersion = availableVersions[selectedIndex - 1];
+  } else {
+    const availableVersions = getAvailableXamppVersions(baseDir, currentVersion);
+    requestedVersion =
+      requestedVersionCandidates.find((candidate) =>
+        availableVersions.some(
+          (availableVersion) =>
+            availableVersion.toLowerCase() === candidate.toLowerCase(),
+        ),
+      ) || requestedVersionCandidates[0];
   }
 
   if (currentVersion.toLowerCase() === requestedVersion.toLowerCase()) {
     console.log(chalk.yellow(`ℹ️ XAMPP ${requestedVersion} is already active`));
-    process.exit(0);
+    console.log(chalk.green("✅ Starting XAMPP with the current version..."));
+    runXamppStart();
+    return;
   }
 
   const currentVersionDir = path.join(baseDir, `xampp-${currentVersion}`);
@@ -1361,17 +1587,55 @@ async function runXamppSwitch(requestedVersionRaw) {
     process.exit(1);
   }
 
-  try {
-    fs.renameSync(xamppRoot, currentVersionDir);
+  const performSwap = async () => {
+    await renameFolderWithRetry(
+      xamppRoot,
+      currentVersionDir,
+      "active XAMPP folder",
+    );
     try {
-      fs.renameSync(requestedVersionDir, xamppRoot);
+      await renameFolderWithRetry(
+        requestedVersionDir,
+        xamppRoot,
+        "requested XAMPP folder",
+      );
     } catch (swapError) {
-      fs.renameSync(currentVersionDir, xamppRoot);
+      await renameFolderWithRetry(
+        currentVersionDir,
+        xamppRoot,
+        "original XAMPP folder rollback",
+      );
       throw swapError;
     }
+  };
+
+  let switchError = null;
+  try {
+    await performSwap();
   } catch (error) {
+    switchError = error;
+  }
+
+  if (switchError && ["EPERM", "EBUSY"].includes(String(switchError.code || "").toUpperCase())) {
+    console.log(chalk.yellow("⚠️ XAMPP folder looks busy. Stopping services and retrying once..."));
+    await runXamppStopByPlatform();
+    const stopped = await waitForXamppStoppedByPlatform();
+    if (!stopped) {
+      console.log(chalk.yellow("⚠️ XAMPP services still appear to be stopping. Retrying folder swap anyway..."));
+    }
+    await closeVsCodeForXamppSwitch();
+    await forceCloseXamppLockers();
+    try {
+      await performSwap();
+      switchError = null;
+    } catch (retryError) {
+      switchError = retryError;
+    }
+  }
+
+  if (switchError) {
     console.log(chalk.red("❌ Failed to switch XAMPP folders"));
-    console.log(chalk.yellow(error.message));
+    console.log(chalk.yellow(switchError.message));
     process.exit(1);
   }
 

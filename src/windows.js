@@ -202,6 +202,27 @@ function canReachHttpUrl(url) {
     });
 }
 
+function canReachTcpPort(host, port) {
+    return new Promise(resolve => {
+        const socket = require("net").connect({ host, port });
+
+        socket.once("connect", () => {
+            socket.destroy();
+            resolve(true);
+        });
+
+        socket.once("error", () => {
+            socket.destroy();
+            resolve(false);
+        });
+
+        socket.setTimeout(2000, () => {
+            socket.destroy();
+            resolve(false);
+        });
+    });
+}
+
 function isWindowsProcessRunning(imageName) {
     return new Promise(resolve => {
         const command = `tasklist /FI "IMAGENAME eq ${imageName}"`;
@@ -241,6 +262,26 @@ async function waitForAnyHttpUrl(urls, timeoutMs = 60000, pollMs = 1500) {
     }
 
     return "";
+}
+
+async function waitForMysqlReady(timeoutMs = 60000, pollMs = 1500) {
+    const host = "127.0.0.1";
+    const ports = [3306, 3307];
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        if (await isWindowsProcessRunning("mysqld.exe")) {
+            for (const port of ports) {
+                if (await canReachTcpPort(host, port)) {
+                    return { host, port };
+                }
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+
+    return null;
 }
 
 function openUrlInBrowser(url) {
@@ -505,6 +546,14 @@ function runXamppStart() {
     }
 
     const finishWithPhpMyAdminCheck = async () => {
+        const mysqlReady = await waitForMysqlReady();
+        if (!mysqlReady) {
+            console.log(chalk.yellow("⚠️ XAMPP started, but MySQL is not reachable yet."));
+            console.log(chalk.yellow("phpMyAdmin may load with a database connection error until MySQL comes up."));
+            console.log(chalk.yellow("Check that MySQL is enabled in XAMPP and that port 3306 or 3307 is free."));
+            return;
+        }
+
         const phpMyAdminUrls = [
             "http://localhost/phpmyadmin/index.php",
             "http://localhost:8080/phpmyadmin/index.php"
@@ -558,7 +607,7 @@ function execAsync(commandLine, options = {}) {
 }
 
 async function runXamppStop(options = {}) {
-    const { strict = false, killDevProcesses = true } = options;
+    const { strict = false, killDevProcesses = false } = options;
 
     if (process.platform !== "win32") {
         console.log(chalk.red("❌ This command is only available on Windows"));
@@ -589,8 +638,10 @@ async function runXamppStop(options = {}) {
     }
 
     const cleanupImages = ["httpd.exe", "mysqld.exe", "php.exe", "xampp-control.exe"];
-    if (killDevProcesses) { cleanupImages.push("git.exe", "node.exe", "code.exe"); }
-    const cleanupCommand = `cmd /c taskkill /F ${cleanupImages.map(name => `/IM ${name}`).join(" ")}`;
+    if (killDevProcesses) {
+        cleanupImages.push("git.exe", "node.exe", "code.exe");
+    }
+    const cleanupCommand = `cmd /c taskkill /F /T ${cleanupImages.map(name => `/IM ${name}`).join(" ")}`;
     const cleanupResult = await execAsync(cleanupCommand, { windowsHide: false });
 
     if (cleanupResult.error) {
