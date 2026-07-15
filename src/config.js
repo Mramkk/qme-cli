@@ -171,7 +171,17 @@ function getSavedProjects() {
                 laravelVersion: laravelVersionValue,
             };
         })
-        .filter(Boolean);
+        .filter(Boolean)
+        .sort((a, b) => {
+            const aTime = Date.parse(a.updatedAt || "") || 0;
+            const bTime = Date.parse(b.updatedAt || "") || 0;
+
+            if (aTime !== bTime) {
+                return bTime - aTime;
+            }
+
+            return b.path.localeCompare(a.path);
+        });
 }
 
 function loadOrCreateRepoConfig(repoUrl) {
