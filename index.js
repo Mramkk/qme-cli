@@ -284,6 +284,15 @@ function detectProjectProfile(baseDir) {
     return "flutter";
   }
   if (pkg) {
+    if (
+      pkg.dependencies?.["@nestjs/common"] ||
+      pkg.dependencies?.["@nestjs/core"] ||
+      pkg.devDependencies?.["@nestjs/common"] ||
+      pkg.devDependencies?.["@nestjs/core"] ||
+      pkg.devDependencies?.["@nestjs/cli"]
+    ) {
+      return "nestjs";
+    }
     if (pkg.dependencies?.next || pkg.devDependencies?.next) return "next";
     if (pkg.dependencies?.react || pkg.devDependencies?.react) return "react";
     if (pkg.dependencies?.vite || pkg.devDependencies?.vite) return "vite";
@@ -297,6 +306,7 @@ function getProjectTypeLabel(profile) {
 
   if (value === "laravel") return "laravel";
   if (value === "flutter") return "flutter";
+  if (value === "nestjs") return "nestjs";
   if (value === "next") return "next";
   if (value === "react") return "react";
   if (value === "vite") return "vite";
@@ -840,6 +850,19 @@ async function runWorkspace() {
     console.log(chalk.cyan("Starting Flutter app..."));
     setLastRunProject({ path: baseDir, type: projectType });
     runCommandInDir("flutter", ["run"], baseDir);
+    return;
+  }
+
+  if (info.profile === "nestjs") {
+    const manager = "npm";
+    if (!info.nodeModules) {
+      console.log(chalk.cyan("Installing dependencies with npm..."));
+      runCommandInDir(manager, ["install"], baseDir);
+    }
+
+    console.log(chalk.cyan("Running npm run start:dev..."));
+    setLastRunProject({ path: baseDir, type: projectType });
+    runCommandInDir(manager, ["run", "start:dev"], baseDir);
     return;
   }
 
