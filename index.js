@@ -2643,6 +2643,142 @@ function expandAliases(inputArgs) {
   return args;
 }
 
+function levenshteinDistance(a, b) {
+  const left = String(a || "").toLowerCase();
+  const right = String(b || "").toLowerCase();
+
+  if (left === right) {
+    return 0;
+  }
+  if (!left.length) {
+    return right.length;
+  }
+  if (!right.length) {
+    return left.length;
+  }
+
+  let prev = Array.from({ length: right.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    const curr = [i];
+
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + cost,
+      );
+    }
+
+    prev = curr;
+  }
+
+  return prev[right.length];
+}
+
+function getCommandSuggestions(input, candidates, limit = 5) {
+  const value = String(input || "").trim().toLowerCase();
+  if (!value) {
+    return [];
+  }
+
+  return candidates
+    .map((candidate) => ({
+      candidate,
+      score: levenshteinDistance(value, candidate),
+    }))
+    .filter(({ score }) => score <= Math.max(2, Math.ceil(value.length / 3)))
+    .sort((a, b) => a.score - b.score || a.candidate.localeCompare(b.candidate))
+    .slice(0, limit)
+    .map(({ candidate }) => candidate);
+}
+
+function printSuggestions(input, candidates, options = {}) {
+  const { label = "command", prefix = "" } = options;
+  const suggestions = getCommandSuggestions(input, candidates);
+
+  if (!suggestions.length) {
+    return false;
+  }
+
+  console.log(
+    chalk.yellow(`Did you mean ${label}${suggestions.length > 1 ? "s" : ""}?`),
+  );
+  for (const suggestion of suggestions) {
+    console.log(chalk.gray(`  ${prefix}${suggestion}`));
+  }
+
+  return true;
+}
+
+function getTopLevelCommands() {
+  return [
+    "help",
+    "alias",
+    "git",
+    "gsync",
+    "config",
+    "update",
+    "proj",
+    "open",
+    "ip",
+    "pem",
+    "npm",
+    "npx",
+    "n",
+    "timer",
+    "pa",
+    "mysql",
+    "flutter",
+    "adb",
+    "run",
+    "init",
+    "win",
+    "w",
+    "wintask",
+    "taskm",
+    "wl",
+    ".",
+    "recent",
+    "path",
+    "postman",
+    "chrome",
+    "gchat",
+    "hub",
+    "mail",
+    "sprint",
+    "sprint-review",
+    "sprint-plan",
+    "notepad",
+    "note",
+    "notes",
+    "quit",
+    "xstart",
+    "xstop",
+    "xswitch",
+    "xini",
+    "xproj",
+    "xampp",
+  ];
+}
+
+function getAliasSubcommands() {
+  return ["list", "ls", "add", "remove", "rm", "del"];
+}
+
+function getFlutterSubcommands() {
+  return ["run", "debug", "release", "devices", "clean", "build"];
+}
+
+function getAdbSubcommands() {
+  return ["devices", "connect", "disconnect", "wifi", "setup"];
+}
+
+function getGitSubcommands() {
+  return ["sync", "reset", "open", "-o", "users", "user", "remove", "ssh-key", "init", "repo"];
+}
+
 async function main() {
   const rawArgs = process.argv.slice(2);
   let args = [...rawArgs];
@@ -2783,6 +2919,10 @@ async function main() {
 
     console.log(chalk.red("❌ Unknown alias subcommand"));
     console.log(chalk.yellow("Usage: qme alias [list|add|remove]"));
+    printSuggestions(sub, getAliasSubcommands(), {
+      label: "alias subcommand",
+      prefix: "qme alias ",
+    });
     process.exit(1);
   }
 
@@ -3012,6 +3152,10 @@ async function main() {
 
     console.log(chalk.red("❌ Unknown Flutter subcommand"));
     console.log(chalk.yellow("Usage: qme flutter [run|debug|release|devices|clean|build]"));
+    printSuggestions(subcommand, getFlutterSubcommands(), {
+      label: "Flutter subcommand",
+      prefix: "qme flutter ",
+    });
     process.exit(1);
   }
 
@@ -3067,6 +3211,10 @@ async function main() {
     }
 
     printAdbMenu();
+    printSuggestions(subcommand, getAdbSubcommands(), {
+      label: "ADB subcommand",
+      prefix: "qme adb ",
+    });
     return;
   }
 
@@ -3413,6 +3561,10 @@ async function main() {
   // console.log(chalk.green("  qme xini  # Open current XAMPP php.ini in VS Code"));
 
   console.log(chalk.red("❌ Unknown command"));
+  printSuggestions(args[0], getTopLevelCommands(), {
+    label: "command",
+    prefix: "qme ",
+  });
   printHelp({
     isError: true,
     message: "Use `qme help` to see available commands.",
