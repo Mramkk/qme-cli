@@ -528,6 +528,39 @@ function removeAlias(name) {
     saveRawConfig(config);
     return true;
 }
+function getUpdateCheckSetting() {
+    const config = loadRawConfig();
+    if (config.system && typeof config.system.updateCheck === "boolean") {
+        return config.system.updateCheck;
+    }
+    return true;
+}
+
+function setUpdateCheckSetting(value) {
+    const config = loadRawConfig();
+    if (!config.system) {
+        config.system = {};
+    }
+    config.system.updateCheck = Boolean(value);
+    saveRawConfig(config);
+}
+
+function getLastUpdateCheckTime() {
+    const config = loadRawConfig();
+    return config.system && config.system.lastUpdateCheckTime
+        ? Number(config.system.lastUpdateCheckTime)
+        : 0;
+}
+
+function setLastUpdateCheckTime(timestamp) {
+    const config = loadRawConfig();
+    if (!config.system) {
+        config.system = {};
+    }
+    config.system.lastUpdateCheckTime = Number(timestamp);
+    saveRawConfig(config);
+}
+
 module.exports = {
     getConfigPath,
     ensureConfigFile,
@@ -550,7 +583,9 @@ module.exports = {
     getXamppPath,
     setXamppCurrentVersion,
     clearXamppCurrentVersion,
-    getXamppCurrentVersion
+    getXamppCurrentVersion,
+    getUpdateCheckSetting,
+    setUpdateCheckSetting,
+    getLastUpdateCheckTime,
+    setLastUpdateCheckTime
 };
-
-
