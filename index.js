@@ -34,7 +34,10 @@ const {
   removeAlias,
   getConfigPath,
   ensureConfigFile,
+  getUpdateCheckSetting,
+  setUpdateCheckSetting,
 } = require("./src/config.js");
+const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
 const { initializeRepo } = require("./src/init.js");
 const { runArtisan } = require("./src/laravel");
@@ -102,6 +105,10 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
+  console.log(chalk.green("  qme config update-check [true|false]"));
+  console.log(chalk.gray("  Enable or disable automated startup update checking"));
+  console.log(chalk.green("  qme update"));
+  console.log(chalk.gray("  Checks for CLI updates and installs if available"));
   console.log(chalk.green("  qme proj"));
   console.log(chalk.gray("  Lists saved projects from qme config"));
   console.log(chalk.green("  qme open <url>"));
@@ -284,6 +291,15 @@ function detectProjectProfile(baseDir) {
     return "flutter";
   }
   if (pkg) {
+    if (
+      pkg.dependencies?.["@nestjs/common"] ||
+      pkg.dependencies?.["@nestjs/core"] ||
+      pkg.devDependencies?.["@nestjs/common"] ||
+      pkg.devDependencies?.["@nestjs/core"] ||
+      pkg.devDependencies?.["@nestjs/cli"]
+    ) {
+      return "nestjs";
+    }
     if (pkg.dependencies?.next || pkg.devDependencies?.next) return "next";
     if (pkg.dependencies?.react || pkg.devDependencies?.react) return "react";
     if (pkg.dependencies?.vite || pkg.devDependencies?.vite) return "vite";
@@ -297,6 +313,7 @@ function getProjectTypeLabel(profile) {
 
   if (value === "laravel") return "laravel";
   if (value === "flutter") return "flutter";
+  if (value === "nestjs") return "nestjs";
   if (value === "next") return "next";
   if (value === "react") return "react";
   if (value === "vite") return "vite";
@@ -840,6 +857,19 @@ async function runWorkspace() {
     console.log(chalk.cyan("Starting Flutter app..."));
     setLastRunProject({ path: baseDir, type: projectType });
     runCommandInDir("flutter", ["run"], baseDir);
+    return;
+  }
+
+  if (info.profile === "nestjs") {
+    const manager = "npm";
+    if (!info.nodeModules) {
+      console.log(chalk.cyan("Installing dependencies with npm..."));
+      runCommandInDir(manager, ["install"], baseDir);
+    }
+
+    console.log(chalk.cyan("Running npm run start:dev..."));
+    setLastRunProject({ path: baseDir, type: projectType });
+    runCommandInDir(manager, ["run", "start:dev"], baseDir);
     return;
   }
 
@@ -2613,10 +2643,162 @@ function expandAliases(inputArgs) {
   return args;
 }
 
+function levenshteinDistance(a, b) {
+  const left = String(a || "").toLowerCase();
+  const right = String(b || "").toLowerCase();
+
+  if (left === right) {
+    return 0;
+  }
+  if (!left.length) {
+    return right.length;
+  }
+  if (!right.length) {
+    return left.length;
+  }
+
+  let prev = Array.from({ length: right.length + 1 }, (_, i) => i);
+
+  for (let i = 1; i <= left.length; i += 1) {
+    const curr = [i];
+
+    for (let j = 1; j <= right.length; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + cost,
+      );
+    }
+
+    prev = curr;
+  }
+
+  return prev[right.length];
+}
+
+function getCommandSuggestions(input, candidates, limit = 5) {
+  const value = String(input || "").trim().toLowerCase();
+  if (!value) {
+    return [];
+  }
+
+  return candidates
+    .map((candidate) => ({
+      candidate,
+      score: levenshteinDistance(value, candidate),
+    }))
+    .filter(({ score }) => score <= Math.max(2, Math.ceil(value.length / 3)))
+    .sort((a, b) => a.score - b.score || a.candidate.localeCompare(b.candidate))
+    .slice(0, limit)
+    .map(({ candidate }) => candidate);
+}
+
+function printSuggestions(input, candidates, options = {}) {
+  const { label = "command", prefix = "" } = options;
+  const suggestions = getCommandSuggestions(input, candidates);
+
+  if (!suggestions.length) {
+    return false;
+  }
+
+  console.log(
+    chalk.yellow(`Did you mean ${label}${suggestions.length > 1 ? "s" : ""}?`),
+  );
+  for (const suggestion of suggestions) {
+    console.log(chalk.gray(`  ${prefix}${suggestion}`));
+  }
+
+  return true;
+}
+
+function getTopLevelCommands() {
+  return [
+    "help",
+    "alias",
+    "git",
+    "gsync",
+    "config",
+    "update",
+    "proj",
+    "open",
+    "ip",
+    "pem",
+    "npm",
+    "npx",
+    "n",
+    "timer",
+    "pa",
+    "mysql",
+    "flutter",
+    "adb",
+    "run",
+    "init",
+    "win",
+    "w",
+    "wintask",
+    "taskm",
+    "wl",
+    ".",
+    "recent",
+    "path",
+    "postman",
+    "chrome",
+    "gchat",
+    "hub",
+    "mail",
+    "sprint",
+    "sprint-review",
+    "sprint-plan",
+    "notepad",
+    "note",
+    "notes",
+    "quit",
+    "xstart",
+    "xstop",
+    "xswitch",
+    "xini",
+    "xproj",
+    "xampp",
+  ];
+}
+
+function getAliasSubcommands() {
+  return ["list", "ls", "add", "remove", "rm", "del"];
+}
+
+function getFlutterSubcommands() {
+  return ["run", "debug", "release", "devices", "clean", "build"];
+}
+
+function getAdbSubcommands() {
+  return ["devices", "connect", "disconnect", "wifi", "setup"];
+}
+
+function getGitSubcommands() {
+  return ["sync", "reset", "open", "-o", "users", "user", "remove", "ssh-key", "init", "repo"];
+}
+
 async function main() {
   const rawArgs = process.argv.slice(2);
   let args = [...rawArgs];
   args = expandAliases(args);
+
+  if (
+    args.length > 0 &&
+    args[0] !== "help" &&
+    !args.includes("--help") &&
+    !args.includes("-h") &&
+    args[0] !== "--version" &&
+    args[0] !== "-v" &&
+    args[0] !== "update"
+  ) {
+    try {
+      await autoCheckUpdateOnStartup();
+    } catch (e) {
+      // Fail silently
+    }
+  }
   if (rawArgs[0] === "debug" && rawArgs[1] === "argv") {
     console.log(chalk.blueBright("Raw argv:"));
     console.log(JSON.stringify(rawArgs, null, 2));
@@ -2737,6 +2919,10 @@ async function main() {
 
     console.log(chalk.red("❌ Unknown alias subcommand"));
     console.log(chalk.yellow("Usage: qme alias [list|add|remove]"));
+    printSuggestions(sub, getAliasSubcommands(), {
+      label: "alias subcommand",
+      prefix: "qme alias ",
+    });
     process.exit(1);
   }
 
@@ -2966,6 +3152,10 @@ async function main() {
 
     console.log(chalk.red("❌ Unknown Flutter subcommand"));
     console.log(chalk.yellow("Usage: qme flutter [run|debug|release|devices|clean|build]"));
+    printSuggestions(subcommand, getFlutterSubcommands(), {
+      label: "Flutter subcommand",
+      prefix: "qme flutter ",
+    });
     process.exit(1);
   }
 
@@ -3021,6 +3211,10 @@ async function main() {
     }
 
     printAdbMenu();
+    printSuggestions(subcommand, getAdbSubcommands(), {
+      label: "ADB subcommand",
+      prefix: "qme adb ",
+    });
     return;
   }
 
@@ -3141,6 +3335,38 @@ async function main() {
     }
 
     setXamppCurrentVersion(option);
+    return;
+  }
+
+  if (args[0] === "config" && args[1] === "update-check") {
+    const value = args[2];
+    if (!value) {
+      const isEnabled = getUpdateCheckSetting();
+      console.log(
+        chalk.green("⚙️ Update check setting:"),
+        isEnabled ? chalk.green("enabled") : chalk.red("disabled"),
+      );
+      return;
+    }
+
+    if (value === "true" || value === "on" || value === "1") {
+      setUpdateCheckSetting(true);
+      console.log(chalk.green("✅ Automatically checking for updates is now enabled."));
+      return;
+    }
+
+    if (value === "false" || value === "off" || value === "0") {
+      setUpdateCheckSetting(false);
+      console.log(chalk.green("✅ Automatically checking for updates is now disabled."));
+      return;
+    }
+
+    console.log(chalk.red("❌ Invalid value. Use 'true' or 'false'."));
+    process.exit(1);
+  }
+
+  if (args[0] === "update") {
+    await runUpdateFlow({ force: true });
     return;
   }
 
@@ -3335,6 +3561,10 @@ async function main() {
   // console.log(chalk.green("  qme xini  # Open current XAMPP php.ini in VS Code"));
 
   console.log(chalk.red("❌ Unknown command"));
+  printSuggestions(args[0], getTopLevelCommands(), {
+    label: "command",
+    prefix: "qme ",
+  });
   printHelp({
     isError: true,
     message: "Use `qme help` to see available commands.",

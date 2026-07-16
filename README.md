@@ -141,7 +141,23 @@ qme config xampp-v --clear
 
 Note: this value is a qme config label (used by qme commands like `qme xampp switch`), not an auto-detected XAMPP binary version.
 
-15. `qme npm <args...>`
+15. `qme config update-check [true|false]`
+    Sets or displays whether automatic daily update checking is enabled.
+
+```bash
+qme config update-check
+qme config update-check false
+qme config update-check true
+```
+
+16. `qme update`
+    Checks the npm registry for updates to `@ramkumarbedia/xqme` and prompts the user to update if a newer version is found.
+
+```bash
+qme update
+```
+
+17. `qme npm <args...>`
     Pass-through for npm commands.
 
 ```bash
