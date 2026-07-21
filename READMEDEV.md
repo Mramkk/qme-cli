@@ -57,13 +57,12 @@ qme config xampp-path "D:\xampp"
 qme config xampp-v 8.1
 qme config xampp-v --show
 qme config xampp-v --clear
-qme config update-check [true|false]
 qme update
 ```
 
 - `qme config` opens the config file in VS Code.
-- `qme config update-check` gets or sets the automatic update checking state.
-- `qme update` manually queries npm registry and prompts to update.
+- qme checks for updates on startup and installs newer versions automatically.
+- `qme update` manually checks the npm registry and installs a newer version automatically.
 
 ### Workspace
 

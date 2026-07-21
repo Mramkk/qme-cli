@@ -1,9 +1,7 @@
 const https = require("https");
 const { spawnSync } = require("child_process");
 const chalk = require("chalk");
-const { askQuestion } = require("./prompts.js");
 const {
-    getUpdateCheckSetting,
     getLastUpdateCheckTime,
     setLastUpdateCheckTime
 } = require("./config.js");
@@ -79,25 +77,16 @@ async function runUpdateFlow({ force = false } = {}) {
             console.log(`${chalk.green("Latest version :")} v${latest}`);
             console.log();
 
-            const answer = await askQuestion(
-                chalk.yellow("👉 Do you want to update now? (y/N): ")
-            );
-            const choice = answer.trim().toLowerCase();
+            console.log(chalk.cyan("🚀 Installing the latest version globally..."));
+            const result = spawnSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
+                stdio: "inherit",
+                shell: true
+            });
 
-            if (choice === "y" || choice === "yes") {
-                console.log(chalk.cyan("\n🚀 Installing the latest version globally..."));
-                const result = spawnSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
-                    stdio: "inherit",
-                    shell: true
-                });
-
-                if (result.status === 0) {
-                    console.log(chalk.green("✅ Successfully updated to the latest version!"));
-                } else {
-                    console.log(chalk.red("❌ Failed to update. Please try running manually: npm i -g @ramkumarbedia/xqme"));
-                }
+            if (result.status === 0) {
+                console.log(chalk.green("✅ Successfully updated to the latest version!"));
             } else {
-                console.log(chalk.gray("⏹️ Update skipped."));
+                console.log(chalk.red("❌ Failed to update. Please try running manually: npm i -g @ramkumarbedia/xqme"));
             }
         } else if (force) {
             console.log(chalk.green(`✅ You are already on the latest version (v${current}).`));
@@ -111,11 +100,6 @@ async function runUpdateFlow({ force = false } = {}) {
 }
 
 async function autoCheckUpdateOnStartup() {
-    const isEnabled = getUpdateCheckSetting();
-    if (!isEnabled) {
-        return;
-    }
-
     const lastCheck = getLastUpdateCheckTime();
     const twentyFourHours = 24 * 60 * 60 * 1000;
 
