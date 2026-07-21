@@ -34,8 +34,6 @@ const {
   removeAlias,
   getConfigPath,
   ensureConfigFile,
-  getUpdateCheckSetting,
-  setUpdateCheckSetting,
 } = require("./src/config.js");
 const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
@@ -105,10 +103,8 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
-  console.log(chalk.green("  qme config update-check [true|false]"));
-  console.log(chalk.gray("  Enable or disable automated startup update checking"));
   console.log(chalk.green("  qme update"));
-  console.log(chalk.gray("  Checks for CLI updates and installs if available"));
+  console.log(chalk.gray("  Checks for and automatically installs CLI updates"));
   console.log(chalk.green("  qme proj"));
   console.log(chalk.gray("  Lists saved projects from qme config"));
   console.log(chalk.green("  qme open <url>"));
@@ -3336,33 +3332,6 @@ async function main() {
 
     setXamppCurrentVersion(option);
     return;
-  }
-
-  if (args[0] === "config" && args[1] === "update-check") {
-    const value = args[2];
-    if (!value) {
-      const isEnabled = getUpdateCheckSetting();
-      console.log(
-        chalk.green("⚙️ Update check setting:"),
-        isEnabled ? chalk.green("enabled") : chalk.red("disabled"),
-      );
-      return;
-    }
-
-    if (value === "true" || value === "on" || value === "1") {
-      setUpdateCheckSetting(true);
-      console.log(chalk.green("✅ Automatically checking for updates is now enabled."));
-      return;
-    }
-
-    if (value === "false" || value === "off" || value === "0") {
-      setUpdateCheckSetting(false);
-      console.log(chalk.green("✅ Automatically checking for updates is now disabled."));
-      return;
-    }
-
-    console.log(chalk.red("❌ Invalid value. Use 'true' or 'false'."));
-    process.exit(1);
   }
 
   if (args[0] === "update") {
