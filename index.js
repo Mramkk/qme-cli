@@ -34,6 +34,8 @@ const {
   removeAlias,
   getConfigPath,
   ensureConfigFile,
+  getUpdateCheckSetting,
+  setUpdateCheckSetting,
 } = require("./src/config.js");
 const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
@@ -103,6 +105,7 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
+  console.log(chalk.gray("  qme config auto-update [enable|disable|--show]"));
   console.log(chalk.green("  qme update"));
   console.log(chalk.gray("  Checks for and automatically installs CLI updates"));
   console.log(chalk.green("  qme proj"));
@@ -3288,6 +3291,41 @@ async function main() {
     const outputPath = args[2] || null;
     exportConfig(outputPath);
     return;
+  }
+
+  if (
+    args[0] === "config" &&
+    (args[1] === "auto-update" || args[1] === "update-check")
+  ) {
+    const option = String(args[2] || "show").toLowerCase();
+
+    if (option === "show" || option === "--show" || option === "-s") {
+      console.log(
+        getUpdateCheckSetting()
+          ? chalk.green("✅ Automatic updates are enabled")
+          : chalk.yellow("ℹ️ Automatic updates are disabled"),
+      );
+      console.log(chalk.gray(`Config: ${getConfigPath()}`));
+      return;
+    }
+
+    if (["enable", "on", "true"].includes(option)) {
+      setUpdateCheckSetting(true);
+      console.log(chalk.green("✅ Automatic updates enabled"));
+      console.log(chalk.gray(`Config: ${getConfigPath()}`));
+      return;
+    }
+
+    if (["disable", "off", "false"].includes(option)) {
+      setUpdateCheckSetting(false);
+      console.log(chalk.yellow("✅ Automatic updates disabled"));
+      console.log(chalk.gray(`Config: ${getConfigPath()}`));
+      return;
+    }
+
+    console.log(chalk.red("❌ Use enable, disable, or --show"));
+    console.log(chalk.yellow("Usage: qme config auto-update [enable|disable|--show]"));
+    process.exit(1);
   }
 
   if (args[0] === "config" && args[1] === "xampp-path") {

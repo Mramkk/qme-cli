@@ -139,9 +139,18 @@ qme config xampp-v -s
 qme config xampp-v --clear
 ```
 
-Note: this value is a qme config label (used by qme commands like `qme xampp switch`), not an auto-detected XAMPP binary version.
+Note: `xampp-v` is a qme config label used by commands like `qme xampp switch`; it is not an auto-detected XAMPP binary version.
 
-15. `qme update`
+15. `qme config auto-update [enable|disable|--show]`
+    Controls qme's automatic update checker. When enabled, qme checks the npm registry at most once every 24 hours during startup and installs a newer CLI version when available. Automatic updates are enabled by default. This setting does not affect the manual `qme update` command.
+
+```bash
+qme config auto-update --show
+qme config auto-update disable
+qme config auto-update enable
+```
+
+16. `qme update`
     Checks the npm registry for updates to `@ramkumarbedia/xqme` and automatically installs a newer version when found.
 
 ```bash
