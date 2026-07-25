@@ -3,7 +3,8 @@ const { spawnSync } = require("child_process");
 const chalk = require("chalk");
 const {
     getLastUpdateCheckTime,
-    setLastUpdateCheckTime
+    setLastUpdateCheckTime,
+    getUpdateCheckSetting
 } = require("./config.js");
 
 function getLocalVersion() {
@@ -100,6 +101,10 @@ async function runUpdateFlow({ force = false } = {}) {
 }
 
 async function autoCheckUpdateOnStartup() {
+    if (!getUpdateCheckSetting()) {
+        return;
+    }
+
     const lastCheck = getLastUpdateCheckTime();
     const twentyFourHours = 24 * 60 * 60 * 1000;
 
