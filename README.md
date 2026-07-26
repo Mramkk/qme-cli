@@ -99,7 +99,7 @@ qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
 qme config
 ```
 
-`qme run` stores successful workspaces in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
+`qme run` detects Laravel, Flutter, and Node.js projects. For NestJS, Angular, React, Vite, Next.js, and generic Node.js projects, it shows actions for `dev`, `dev watch`, and `build`, then runs the matching package script (using npm, pnpm, or Yarn based on the lockfile). Successful workspaces are stored in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
 
 10. `qme config branch <branch-name>`
    Stores pull branch for current repo in qme config.

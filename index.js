@@ -299,6 +299,13 @@ function detectProjectProfile(baseDir) {
     ) {
       return "nestjs";
     }
+    if (
+      hasFile(baseDir, "angular.json") ||
+      pkg.dependencies?.["@angular/core"] ||
+      pkg.devDependencies?.["@angular/core"]
+    ) {
+      return "angular";
+    }
     if (pkg.dependencies?.next || pkg.devDependencies?.next) return "next";
     if (pkg.dependencies?.react || pkg.devDependencies?.react) return "react";
     if (pkg.dependencies?.vite || pkg.devDependencies?.vite) return "vite";
@@ -313,6 +320,7 @@ function getProjectTypeLabel(profile) {
   if (value === "laravel") return "laravel";
   if (value === "flutter") return "flutter";
   if (value === "nestjs") return "nestjs";
+  if (value === "angular") return "angular";
   if (value === "next") return "next";
   if (value === "react") return "react";
   if (value === "vite") return "vite";
@@ -706,7 +714,7 @@ function inspectRunEnvironment(baseDir) {
   if (profile === "laravel") {
     checks.push({ ok: hasEnv, label: ".env", detail: hasEnv ? "found" : hasEnvExample ? "missing, .env.example exists" : "missing" });
     checks.push({ ok: hasFile(baseDir, "artisan"), label: "artisan", detail: "Laravel entry point" });
-  } else if (profile === "node" || profile === "react" || profile === "vite" || profile === "next") {
+  } else if (profile === "node" || profile === "nestjs" || profile === "angular" || profile === "react" || profile === "vite" || profile === "next") {
     checks.push({ ok: nodeModules, label: "node_modules", detail: nodeModules ? "installed" : "missing" });
     checks.push({ ok: hasEnv || hasEnvExample, label: ".env", detail: hasEnv ? "found" : hasEnvExample ? "only .env.example found" : "missing" });
   } else if (profile === "flutter") {
@@ -723,6 +731,64 @@ function inspectRunEnvironment(baseDir) {
     startScript ? "npm start" : "";
 
   return { profile, pkg, checks, hasEnv, hasEnvExample, nodeModules, nextStep, envValues };
+}
+
+function getNodeRunCommand(info, manager, action) {
+  const scripts = info.pkg?.scripts || {};
+  const candidates = {
+    dev: info.profile === "nestjs" ? ["start"] : ["dev", "start"],
+    watch: info.profile === "nestjs" ? ["start:dev", "dev:watch", "watch"] : ["dev:watch", "watch"],
+    build: ["build"],
+  }[action];
+
+  const script = candidates.find((name) => scripts[name]);
+  if (script) {
+    return { command: manager, args: ["run", script], label: `${manager} run ${script}` };
+  }
+
+  if (action === "watch" && scripts.dev) {
+    return { command: manager, args: ["run", "dev", "--", "--watch"], label: `${manager} run dev -- --watch` };
+  }
+
+  // Angular's standard CLI projects sometimes omit the npm scripts.
+  if (info.profile === "angular") {
+    if (action === "dev") return { command: "npx", args: ["ng", "serve"], label: "npx ng serve" };
+    if (action === "watch") return { command: "npx", args: ["ng", "serve", "--watch"], label: "npx ng serve --watch" };
+    if (action === "build") return { command: "npx", args: ["ng", "build"], label: "npx ng build" };
+  }
+
+  return null;
+}
+
+async function runNodeProjectMenu(info, baseDir, projectType) {
+  const manager = getNodePackageManager(baseDir);
+  if (!info.nodeModules) {
+    console.log(chalk.cyan(`Installing dependencies with ${manager}...`));
+    runCommandInDir(manager, ["install"], baseDir);
+  }
+
+  console.log();
+  console.log(chalk.blueBright("Choose a project action:"));
+  console.log(chalk.green("  1) dev"));
+  console.log(chalk.green("  2) dev watch"));
+  console.log(chalk.green("  3) build"));
+
+  const answer = (await askQuestion(chalk.yellow("👉 Choose an option (1-3) [Enter to abort]: "))).trim();
+  const action = { "1": "dev", "2": "watch", "3": "build" }[answer];
+  if (!action) {
+    console.log(chalk.gray("⏹️ Project run aborted"));
+    return;
+  }
+
+  const runCommand = getNodeRunCommand(info, manager, action);
+  if (!runCommand) {
+    console.log(chalk.yellow(`ℹ️ No script found for ${action}`));
+    return;
+  }
+
+  console.log(chalk.cyan(`Running ${runCommand.label}...`));
+  setLastRunProject({ path: baseDir, type: projectType });
+  runCommandInDir(runCommand.command, runCommand.args, baseDir);
 }
 
 function runPilot() {
@@ -859,42 +925,8 @@ async function runWorkspace() {
     return;
   }
 
-  if (info.profile === "nestjs") {
-    const manager = "npm";
-    if (!info.nodeModules) {
-      console.log(chalk.cyan("Installing dependencies with npm..."));
-      runCommandInDir(manager, ["install"], baseDir);
-    }
-
-    console.log(chalk.cyan("Running npm run start:dev..."));
-    setLastRunProject({ path: baseDir, type: projectType });
-    runCommandInDir(manager, ["run", "start:dev"], baseDir);
-    return;
-  }
-
-  if (info.profile === "node" || info.profile === "react" || info.profile === "vite" || info.profile === "next") {
-    const manager = getNodePackageManager(baseDir);
-    if (!info.nodeModules) {
-      console.log(chalk.cyan(`Installing dependencies with ${manager}...`));
-      runCommandInDir(manager, ["install"], baseDir);
-    }
-
-    const scripts = info.pkg?.scripts || {};
-    if (scripts.dev) {
-      console.log(chalk.cyan(`Running ${manager} run dev...`));
-      setLastRunProject({ path: baseDir, type: projectType });
-      runCommandInDir(manager, ["run", "dev"], baseDir);
-      return;
-    }
-
-    if (scripts.start) {
-      console.log(chalk.cyan(`Running ${manager} run start...`));
-      setLastRunProject({ path: baseDir, type: projectType });
-      runCommandInDir(manager, ["run", "start"], baseDir);
-      return;
-    }
-
-    console.log(chalk.yellow("ℹ️ No dev/start script found"));
+  if (info.profile === "node" || info.profile === "nestjs" || info.profile === "angular" || info.profile === "react" || info.profile === "vite" || info.profile === "next") {
+    await runNodeProjectMenu(info, baseDir, projectType);
     return;
   }
 
