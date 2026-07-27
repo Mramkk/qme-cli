@@ -2202,7 +2202,7 @@ async function runGitUserSwitch() {
     }
   }
 
-  // If the remote URL includes a username (e.g. https://USER@github.com/org/repo.git),
+  // If the remote URL includes credentials, strip them before displaying the URL.
   // Git can keep showing that user even after credentials are cleared.
   if (inRepo && originUrlRaw && originUrlRaw.includes("://")) {
     try {
