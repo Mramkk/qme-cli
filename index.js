@@ -47,7 +47,6 @@ const {
   runGoogleChat,
   runHubstaff,
   runMail,
-  runOutlookMail,
   runXamppStart,
   runXamppStop,
 } = require("./src/windows");
@@ -125,10 +124,6 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
   console.log(chalk.green("  qme xproj"));
   console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
-  console.log(chalk.green("  qme sprint-review [to-email]"));
-  console.log(chalk.gray("  Creates an Outlook sprint review mail draft"));
-  console.log(chalk.green("  qme sprint-plan [to-email]"));
-  console.log(chalk.gray("  Creates an Outlook sprint plan mail draft"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
@@ -192,20 +187,12 @@ function runWindowsShellSync(commandLine, options = {}) {
   return true;
 }
 
-function encodeUrlValue(value) {
-  return encodeURIComponent(String(value || ""));
-}
-
 function formatShortDate(date = new Date()) {
   return [
     String(date.getDate()).padStart(2, "0"),
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getFullYear()).slice(-2),
   ].join("-");
-}
-
-function formatMonthName(date = new Date()) {
-  return date.toLocaleString("en-US", { month: "long" });
 }
 
 function formatDateOnly(value) {
@@ -932,71 +919,6 @@ async function runWorkspace() {
   }
 
   console.log(chalk.yellow("ℹ️ Unknown project type"));
-}
-
-function buildSprintDraft({
-  args = [],
-  title,
-  greeting,
-  intro,
-}) {
-  if (process.platform !== "win32") {
-    console.log(chalk.red("❌ This command is only available on Windows"));
-    process.exit(1);
-  }
-
-  const defaultRecipients = [
-    "hr1.neovifytechnolabs@gmail.com",
-    "suresh.r@neovify.com",
-  ];
-  const defaultCcRecipients = [
-    "neovifyqa@gmail.com",
-    "pm.neovify@gmail.com",
-  ];
-  const toList = args.length
-    ? args.map((arg) => String(arg || "").trim()).filter(Boolean)
-    : defaultRecipients;
-  const to = toList.join(";");
-  const cc = defaultCcRecipients.join(";");
-  const monthName = formatMonthName();
-  const subject = `${title} ( ${monthName} ) for This Week Backend`;
-  const body = [
-    greeting,
-    "",
-    intro,
-    "",
-
-    "",
-    " Kindly let us know if any additional priorities need to be included",
-    "",
-  ].join("\r\n");
-
-  return [
-    `mailto:${encodeUrlValue(to)}`,
-    `?subject=${encodeUrlValue(subject)}`,
-    `&body=${encodeUrlValue(body)}`,
-    `&cc=${encodeUrlValue(cc)}`,
-  ].join("");
-}
-
-function runSprintReviewMail(args = []) {
-  const composeUrl = buildSprintDraft({
-    args,
-    title: "Sprint Review",
-    greeting: "Hi QA,",
-    intro: "Please find the sprint update below.",
-  });
-  runOutlookMail(composeUrl);
-}
-
-function runSprintPlanMail(args = []) {
-  const composeUrl = buildSprintDraft({
-    args,
-    title: "Sprint Plan",
-    greeting: "Hi QA,",
-    intro: "Please find the sprint plan below.",
-  });
-  runOutlookMail(composeUrl);
 }
 
 function getMysqlBinExecutableCandidates(binaryName) {
@@ -2644,8 +2566,6 @@ const RESERVED_ALIAS_NAMES = new Set([
   "gchat",
   "hub",
   "mail",
-  "sprint-review",
-  "sprint-plan",
   "mysql",
   "adb",
   "notepad",
@@ -2833,8 +2753,6 @@ function getTopLevelCommands() {
     "hub",
     "mail",
     "sprint",
-    "sprint-review",
-    "sprint-plan",
     "notepad",
     "note",
     "notes",
@@ -3555,16 +3473,6 @@ async function main() {
 
   if (args[0] === "mail") {
     runMail();
-    return;
-  }
-
-  if (args[0] === "sprint" || args[0] === "sprint-review") {
-    runSprintReviewMail(args.slice(1));
-    return;
-  }
-
-  if (args[0] === "sprint-plan") {
-    runSprintPlanMail(args.slice(1));
     return;
   }
 
