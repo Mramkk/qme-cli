@@ -61,23 +61,24 @@ function getDefaultSshEmail() {
     return getDefaultEmail();
 }
 
-function buildKeyFileName(tagInput) {
+function buildKeyFileName(tagInput, keyType = "rsa") {
     const tag = (tagInput || "").trim();
     if (!tag) {
         return "";
     }
 
-    if (tag.startsWith("id_rsa")) {
+    if (tag.startsWith("id_rsa") || tag.startsWith("id_ed25519")) {
         return tag;
     }
 
-    return `id_rsa_${tag}`;
+    return `${keyType === "ed25519" ? "id_ed25519" : "id_rsa"}_${tag}`;
 }
 
 function generateGitSshKey(options = {}) {
     const homeDir = resolveHomeDirectory(options.homeDir);
     const email = (options.comment || getDefaultEmail()).trim();
-    const keyName = buildKeyFileName(options.fileTag);
+    const keyType = options.keyType === "ed25519" ? "ed25519" : "rsa";
+    const keyName = buildKeyFileName(options.fileTag, keyType);
 
     if (!email) {
         console.log(chalk.red("❌ Email/comment cannot be empty"));
@@ -101,9 +102,15 @@ function generateGitSshKey(options = {}) {
     console.log(chalk.blueBright("📧 Comment/email:"), chalk.green(email));
     console.log(chalk.cyan("Generating SSH key..."));
 
+    const sshKeygenArgs = ["-t", keyType];
+    if (keyType === "rsa") {
+        sshKeygenArgs.push("-b", "4096");
+    }
+    sshKeygenArgs.push("-C", email, "-f", privateKeyPath, "-N", "");
+
     const result = spawnSync(
         "ssh-keygen",
-        ["-t", "rsa", "-b", "4096", "-C", email, "-f", privateKeyPath, "-N", ""],
+        sshKeygenArgs,
         { stdio: "inherit" }
     );
 
