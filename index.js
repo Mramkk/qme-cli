@@ -97,6 +97,7 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git users [switch|add|remove]"));
   console.log(chalk.green("  qme alias [list|add|remove]"));
   console.log(chalk.green("  qme mysql"));
+  console.log(chalk.gray("  qme mysql permission   Updates XAMPP MySQL data-folder permissions"));
   console.log(chalk.green("  qme ip"));
   console.log(chalk.green("  qme flutter"));
   console.log(chalk.gray("  App run, build, devices, clean, and common Flutter targets"));
@@ -1051,6 +1052,59 @@ function resolveMysqlExecutable() {
 
 function resolveMysqldumpExecutable() {
   return resolveMysqlBinExecutable(getMysqldumpExecutableCandidates(), "mysqldump");
+}
+
+function runMysqlPermission() {
+  if (process.platform !== "win32") {
+    console.log(chalk.red("❌ This command is only available on Windows"));
+    process.exit(1);
+  }
+
+  const xamppPath = getXamppPath();
+  if (!xamppPath) {
+    console.log(chalk.red("❌ XAMPP path is not configured"));
+    console.log(chalk.yellow('Set it first: qme config xampp-path "H:\\xampp"'));
+    process.exit(1);
+  }
+
+  const mysqlDataPath = path.join(xamppPath, "mysql", "data");
+  if (!fs.existsSync(mysqlDataPath)) {
+    console.log(chalk.red(`❌ MySQL data folder was not found: ${mysqlDataPath}`));
+    process.exit(1);
+  }
+
+  const username = String(process.env.USERNAME || "").trim();
+  if (!username) {
+    console.log(chalk.red("❌ Windows username could not be detected"));
+    process.exit(1);
+  }
+
+  console.log(chalk.cyan(`Applying permissions to: ${mysqlDataPath}`));
+  const attribResult = spawnSync("attrib", ["-R", path.join(mysqlDataPath, "*"), "/S", "/D"], {
+    stdio: "inherit",
+    windowsHide: true,
+  });
+
+  if (attribResult.error || attribResult.status !== 0) {
+    console.log(chalk.red("❌ Failed to remove read-only attributes"));
+    process.exit(1);
+  }
+
+  const icaclsResult = spawnSync("icacls", [
+    mysqlDataPath,
+    "/grant",
+    `${username}:(OI)(CI)M`,
+  ], {
+    stdio: "inherit",
+    windowsHide: true,
+  });
+
+  if (icaclsResult.error || icaclsResult.status !== 0) {
+    console.log(chalk.red("❌ Permission update failed. Run this command as Administrator."));
+    process.exit(1);
+  }
+
+  console.log(chalk.green("✅ MySQL permissions updated"));
 }
 
 function quoteMysqlIdentifier(value) {
@@ -3122,6 +3176,11 @@ async function main() {
   }
 
   if (args[0] === "mysql") {
+    if (args[1] === "permission" || args[1] === "permissions") {
+      runMysqlPermission();
+      return;
+    }
+
     await runMysqlMenu(args);
     return;
   }

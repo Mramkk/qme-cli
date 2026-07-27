@@ -150,6 +150,15 @@ qme config auto-update disable
 qme config auto-update enable
 ```
 
+`qme mysql permission`
+    Removes read-only attributes and grants the current Windows user modify access to the configured XAMPP MySQL data folder.
+
+```cmd
+qme mysql permission
+```
+
+Run this command from **Command Prompt opened as Administrator**.
+
 16. `qme update`
     Checks the npm registry for updates to `@ramkumarbedia/xqme` and automatically installs a newer version when found.
 
