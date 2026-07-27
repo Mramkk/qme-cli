@@ -44,7 +44,7 @@ qme git repo project id 123
 - `qme git sync` runs the guided commit/pull/push flow.
 - `qme git open` opens the current repository remote in the browser.
 - `qme git users [switch|add|remove]` manages saved Git identities.
-- `qme git ssh-key` creates an RSA 4096 SSH key in the platform home directory.
+- `qme git ssh-key` creates an Ed25519 SSH key in the platform home directory.
 - `qme git repo project id <project-id>` stores the repo project ID for GitLab merge request automation.
 
 ### Config

@@ -3171,6 +3171,7 @@ async function main() {
       homeDir,
       comment,
       fileTag,
+      keyType: "ed25519",
     });
     return;
   }
