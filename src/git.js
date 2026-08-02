@@ -1089,6 +1089,16 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "push") {
+    try {
+      pushCurrentBranch(currentBranch);
+      console.log(chalk.green("✅ Push completed"));
+    } catch (error) {
+      console.log(chalk.red(`❌ Push failed: ${formatGitError(error)}`));
+    }
+    return;
+  }
+
   if (action === "checkout") {
     await checkoutBranchFromMenu(currentBranch);
     return;
