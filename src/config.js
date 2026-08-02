@@ -285,7 +285,7 @@ function setProjectIdForRepo(repoUrl, projectId) {
 function exportConfig(destinationPath) {
     const outputPath = destinationPath
         ? path.resolve(destinationPath)
-        : path.resolve(process.cwd(), "mycli-config-backup.json");
+        : path.join(os.homedir(), "Downloads", "mycli-config-backup.json");
 
     const sourceExists = fs.existsSync(CONFIG_PATH);
     const content = sourceExists
