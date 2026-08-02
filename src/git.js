@@ -2097,19 +2097,25 @@ async function runGitUserSwitch() {
 	  while (savedUsers.length > 0) {
 	    console.log();
 	    console.log(chalk.blueBright("👥 Saved git users:"));
+	    console.log(chalk.yellow("  a) Add a new user"));
 	    console.log(chalk.yellow("  r) Remove a saved user"));
 	    savedUsers.forEach((user, index) => {
 	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
 	    });
 
 	    const answerRaw = await askQuestion(
-	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (r = remove, Enter = cancel): `),
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, Enter = cancel): `),
 	    );
 	    const answer = String(answerRaw || "").trim().toLowerCase();
 
 	    if (!answer) {
 	      console.log(chalk.yellow("ℹ️ Cancelled."));
 	      return;
+	    }
+	    if (answer === "a" || answer === "add") {
+	      await runGitUserAdd();
+	      savedUsers = getGitUsers();
+	      continue;
 	    }
 	    if (answer === "r" || answer === "rm" || answer === "remove" || answer === "d" || answer === "del" || answer === "delete") {
 	      await runGitUserRemove();
@@ -2444,12 +2450,54 @@ async function runGitUserSwitch() {
   }
 
 }
+
+async function selectGitUserForSsh() {
+  let savedUsers = getGitUsers();
+
+  while (true) {
+    console.log();
+    console.log(chalk.blueBright("👥 Select Git user for SSH key:"));
+    console.log(chalk.yellow("  a) Add a new user"));
+    console.log(chalk.yellow("  r) Remove a saved user"));
+    savedUsers.forEach((user, index) => {
+      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+    });
+
+    const answer = String(
+      await askQuestion(
+        chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, Enter = abort): `),
+      ),
+    ).trim().toLowerCase();
+
+    if (!answer) {
+      return null;
+    }
+    if (answer === "a" || answer === "add") {
+      await runGitUserAdd();
+      savedUsers = getGitUsers();
+      continue;
+    }
+    if (answer === "r" || answer === "rm" || answer === "remove") {
+      await runGitUserRemove();
+      savedUsers = getGitUsers();
+      continue;
+    }
+
+    const selectedIndex = Number.parseInt(answer, 10);
+    if (Number.isInteger(selectedIndex) && selectedIndex >= 1 && selectedIndex <= savedUsers.length) {
+      return savedUsers[selectedIndex - 1];
+    }
+
+    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
+  }
+}
 module.exports = {
   runGitSync,
   runGitReset,
   runGitOpen,
   runGitRemove,
   runGitUserSwitch,
+  selectGitUserForSsh,
   runGitUserAdd,
   runGitUserRemove,
 };
