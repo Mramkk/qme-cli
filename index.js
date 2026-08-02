@@ -36,6 +36,7 @@ const {
   ensureConfigFile,
   getUpdateCheckSetting,
   setUpdateCheckSetting,
+  getSprintMailRecipients,
 } = require("./src/config.js");
 const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
@@ -47,6 +48,7 @@ const {
   runGoogleChat,
   runHubstaff,
   runMail,
+  runThunderbirdMail,
   runXamppStart,
   runXamppStop,
 } = require("./src/windows");
@@ -124,6 +126,10 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
   console.log(chalk.green("  qme xproj"));
   console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
+  console.log(chalk.green("  qme sprint-review [to-email]"));
+  console.log(chalk.gray("  Creates a Thunderbird sprint review mail draft"));
+  console.log(chalk.green("  qme sprint-plan [to-email]"));
+  console.log(chalk.gray("  Creates a Thunderbird sprint plan mail draft"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
   console.log();
@@ -755,28 +761,31 @@ async function runNodeProjectMenu(info, baseDir, projectType) {
     runCommandInDir(manager, ["install"], baseDir);
   }
 
-  console.log();
-  console.log(chalk.blueBright("Choose a project action:"));
-  console.log(chalk.green("  1) dev"));
-  console.log(chalk.green("  2) dev watch"));
-  console.log(chalk.green("  3) build"));
+  const scripts = Object.keys(info.pkg?.scripts || {});
+  if (!scripts.length) {
+    console.log(chalk.yellow("ℹ️ No scripts found in package.json"));
+    return;
+  }
 
-  const answer = (await askQuestion(chalk.yellow("👉 Choose an option (1-3) [Enter to abort]: "))).trim();
-  const action = { "1": "dev", "2": "watch", "3": "build" }[answer];
-  if (!action) {
+  console.log();
+  console.log(chalk.blueBright("Choose a package script:"));
+  scripts.forEach((script, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${script}`));
+  });
+
+  const answer = (await askQuestion(chalk.yellow(`👉 Choose an option (1-${scripts.length}) [Enter to abort]: `))).trim();
+  const selectedIndex = Number.parseInt(answer, 10) - 1;
+  const selectedScript = Number.isInteger(selectedIndex) && selectedIndex >= 0
+    ? scripts[selectedIndex]
+    : "";
+  if (!selectedScript) {
     console.log(chalk.gray("⏹️ Project run aborted"));
     return;
   }
 
-  const runCommand = getNodeRunCommand(info, manager, action);
-  if (!runCommand) {
-    console.log(chalk.yellow(`ℹ️ No script found for ${action}`));
-    return;
-  }
-
-  console.log(chalk.cyan(`Running ${runCommand.label}...`));
+  console.log(chalk.cyan(`Running ${manager} run ${selectedScript}...`));
   setLastRunProject({ path: baseDir, type: projectType });
-  runCommandInDir(runCommand.command, runCommand.args, baseDir);
+  runCommandInDir(manager, ["run", selectedScript], baseDir);
 }
 
 function runPilot() {
@@ -919,6 +928,64 @@ async function runWorkspace() {
   }
 
   console.log(chalk.yellow("ℹ️ Unknown project type"));
+}
+
+function buildSprintDraft({
+  args = [],
+  title,
+  greeting,
+  intro,
+}) {
+  if (process.platform !== "win32") {
+    console.log(chalk.red("❌ This command is only available on Windows"));
+    process.exit(1);
+  }
+
+  const { to: defaultRecipients, cc: defaultCcRecipients } = getSprintMailRecipients();
+  const toList = args.length
+    ? args.map((arg) => String(arg || "").trim()).filter(Boolean)
+    : defaultRecipients;
+  const to = toList.join(";");
+  const cc = defaultCcRecipients.join(";");
+  const monthName = formatMonthName();
+  const subject = `${title} ( ${monthName} ) for This Week Backend`;
+  const body = [
+    greeting,
+    "",
+    intro,
+    "",
+
+    "",
+    " Kindly let us know if any additional priorities need to be included",
+    "",
+  ].join("\r\n");
+
+  return [
+    `mailto:${encodeUrlValue(to)}`,
+    `?subject=${encodeUrlValue(subject)}`,
+    `&body=${encodeUrlValue(body)}`,
+    `&cc=${encodeUrlValue(cc)}`,
+  ].join("");
+}
+
+function runSprintReviewMail(args = []) {
+  const composeUrl = buildSprintDraft({
+    args,
+    title: "Sprint Review",
+    greeting: "Hi QA,",
+    intro: "Please find the sprint update below.",
+  });
+  runThunderbirdMail(composeUrl);
+}
+
+function runSprintPlanMail(args = []) {
+  const composeUrl = buildSprintDraft({
+    args,
+    title: "Sprint Plan",
+    greeting: "Hi QA,",
+    intro: "Please find the sprint plan below.",
+  });
+  runThunderbirdMail(composeUrl);
 }
 
 function getMysqlBinExecutableCandidates(binaryName) {

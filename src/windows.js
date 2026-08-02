@@ -142,27 +142,57 @@ function buildBlueMailCommand() {
     return 'cmd /c start "" "BlueMail:"';
 }
 
-function buildOutlookCommand(composeUrl) {
+function getMailtoComposeFields(composeUrl) {
+    const parsed = new URL(composeUrl);
+    const normalizeRecipients = (value) => decodeURIComponent(value || "")
+        .split(/[;,]/)
+        .map((recipient) => recipient.trim())
+        .filter(Boolean)
+        .join(",");
+    const fields = {
+        to: normalizeRecipients(parsed.pathname),
+        cc: normalizeRecipients(parsed.searchParams.get("cc")),
+        subject: parsed.searchParams.get("subject") || "",
+        body: parsed.searchParams.get("body") || "",
+    };
+
+    return fields;
+}
+
+function escapeThunderbirdComposeValue(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, "\\n");
+}
+
+function buildThunderbirdCommand(composeUrl) {
     const programFiles = process.env.ProgramFiles || "C:\\Program Files";
     const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
     const localAppData = process.env.LOCALAPPDATA || "";
 
     const candidates = [
-        `${programFiles}\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE`,
-        `${programFilesX86}\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE`,
-        `${programFiles}\\Microsoft Office\\Office16\\OUTLOOK.EXE`,
-        `${programFilesX86}\\Microsoft Office\\Office16\\OUTLOOK.EXE`,
-        `${localAppData}\\Microsoft\\Office\\root\\Office16\\OUTLOOK.EXE`,
+        `${programFiles}\\Mozilla Thunderbird\\thunderbird.exe`,
+        `${programFilesX86}\\Mozilla Thunderbird\\thunderbird.exe`,
+        `${localAppData}\\Mozilla Thunderbird\\thunderbird.exe`,
     ].filter(Boolean);
 
-    const quotedUrl = `"${composeUrl}"`;
+    let fields;
+    try {
+        fields = getMailtoComposeFields(composeUrl);
+    } catch {
+        throw new Error("Invalid sprint mail compose URL");
+    }
+
+    const composeArgs = Object.entries(fields)
+        .filter(([, value]) => value)
+        .map(([key, value]) => `${key}='${escapeThunderbirdComposeValue(value)}'`)
+        .join(",");
+
     for (const candidate of candidates) {
         if (fs.existsSync(candidate)) {
-            return `cmd /c start "" "${candidate}" /c ipm.note /m ${quotedUrl}`;
+            return `cmd /c start "" "${candidate}" -compose "${composeArgs}"`;
         }
     }
 
-    return `cmd /c start "" "${composeUrl}"`;
+    return `cmd /c start "" thunderbird.exe -compose "${composeArgs}"`;
 }
 
 function buildChromeCommand() {
@@ -521,21 +551,21 @@ function runMail() {
     });
 }
 
-function runOutlookMail(composeUrl) {
+function runThunderbirdMail(composeUrl) {
     if (process.platform !== "win32") {
         console.log(chalk.red("❌ This command is only available on Windows"));
         process.exit(1);
     }
 
-    const commandLine = buildOutlookCommand(composeUrl);
+    const commandLine = buildThunderbirdCommand(composeUrl);
     exec(commandLine, { windowsHide: false }, error => {
         if (error) {
-            console.log(chalk.red("❌ Outlook desktop app not found"));
-            console.log(chalk.yellow("Install Microsoft Outlook desktop and try again."));
+            console.log(chalk.red("❌ Thunderbird desktop app not found"));
+            console.log(chalk.yellow("Install Thunderbird or make sure `thunderbird.exe` is available in PATH."));
             process.exit(1);
         }
 
-        console.log(chalk.green("✅ Opened Outlook desktop app"));
+        console.log(chalk.green("✅ Opened Thunderbird compose window"));
     });
 }
 
@@ -672,7 +702,7 @@ module.exports = {
     runGoogleChat,
     runHubstaff,
     runMail,
-    runOutlookMail,
+    runThunderbirdMail,
     runXamppStart,
     runXamppStop
 };

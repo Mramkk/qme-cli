@@ -53,6 +53,32 @@ function ensureConfigFile() {
     return CONFIG_PATH;
 }
 
+function getSprintMailRecipients() {
+    const localConfigPath = path.resolve(__dirname, "..", "qme-cli.json");
+    let config = loadRawConfig();
+
+    if (fs.existsSync(localConfigPath)) {
+        try {
+            config = JSON.parse(fs.readFileSync(localConfigPath, "utf8"));
+        } catch {
+            // Fall back to the existing user config when qme-cli.json is invalid.
+        }
+    }
+
+    const sprintMail = config.system && config.system.sprintMail;
+    const normalizeRecipients = (value, fallback) => {
+        const recipients = Array.isArray(value)
+            ? value.map((item) => String(item || "").trim()).filter(Boolean)
+            : [];
+        return recipients.length ? recipients : fallback;
+    };
+
+    return {
+        to: normalizeRecipients(sprintMail && sprintMail.to, []),
+        cc: normalizeRecipients(sprintMail && sprintMail.cc, []),
+    };
+}
+
 function setLastRunProject(project) {
     const config = loadRawConfig();
     if (!config.system) {
@@ -587,5 +613,6 @@ module.exports = {
     getUpdateCheckSetting,
     setUpdateCheckSetting,
     getLastUpdateCheckTime,
-    setLastUpdateCheckTime
+    setLastUpdateCheckTime,
+    getSprintMailRecipients,
 };
