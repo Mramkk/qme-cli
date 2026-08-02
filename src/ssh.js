@@ -61,6 +61,76 @@ function getDefaultSshEmail() {
     return getDefaultEmail();
 }
 
+function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
+    const normalizedHost = String(hostName || "").trim();
+    if (!normalizedHost) {
+        throw new Error("SSH host name is required");
+    }
+
+    const sshDir = path.join(homeDir, ".ssh");
+    const configPath = path.join(sshDir, "config");
+    const existing = fs.existsSync(configPath)
+        ? fs.readFileSync(configPath, "utf8")
+        : "";
+    const lines = existing ? existing.split(/\r?\n/) : [];
+    const output = [];
+    const identityFile = `~/.ssh/${path.basename(privateKeyPath).replace(/\\/g, "/")}`;
+    let currentBlock = [];
+    let hostExists = false;
+
+    const flushBlock = () => {
+        if (!currentBlock.length) {
+            return;
+        }
+
+        const hostIndex = currentBlock.findIndex((line) => /^\s*Host\s+/i.test(line));
+        const hostLine = hostIndex >= 0 ? currentBlock[hostIndex] : "";
+        const hosts = hostLine
+            ? hostLine.replace(/^\s*Host\s+/i, "").trim().split(/\s+/)
+            : [];
+
+        if (hosts.includes(normalizedHost)) {
+            hostExists = true;
+            output.push(...currentBlock);
+        } else {
+            output.push(...currentBlock);
+        }
+
+        currentBlock = [];
+    };
+
+    lines.forEach((line) => {
+        if (/^\s*Host\s+/i.test(line) && currentBlock.length) {
+            flushBlock();
+        }
+        currentBlock.push(line);
+    });
+    flushBlock();
+
+    if (hostExists) {
+        return { configPath, created: false };
+    }
+
+    while (output.length && !output[output.length - 1].trim()) {
+        output.pop();
+    }
+    if (output.length) {
+        output.push("");
+    }
+    output.push(
+        `Host ${normalizedHost}`,
+        `  HostName ${normalizedHost}`,
+        "  User git",
+        `  IdentityFile ${identityFile}`,
+        "  IdentitiesOnly yes",
+        "",
+    );
+
+    fs.mkdirSync(sshDir, { recursive: true });
+    fs.writeFileSync(configPath, output.join("\n"), "utf8");
+    return { configPath, created: true };
+}
+
 function buildKeyFileName(tagInput, keyType = "rsa") {
     const tag = (tagInput || "").trim();
     if (!tag) {
@@ -136,9 +206,12 @@ function generateGitSshKey(options = {}) {
     console.log();
     console.log(chalk.yellow("Copy this public key to GitHub/GitLab/Bitbucket:"));
     console.log(chalk.white(publicKey));
+
+    return { homeDir, privateKeyPath, publicKeyPath };
 }
 
 module.exports = {
     generateGitSshKey,
-    getDefaultSshEmail
+    getDefaultSshEmail,
+    updateSshConfig,
 };

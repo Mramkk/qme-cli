@@ -14,9 +14,10 @@ const {
   runGitUserSwitch,
   runGitUserAdd,
   runGitUserRemove,
+  selectGitUserForSsh,
 } = require("./src/git.js");
-const { generateGitSshKey, getDefaultSshEmail } = require("./src/ssh.js");
-const { askQuestion, askSshEmail, askSshTag } = require("./src/prompts.js");
+const { generateGitSshKey, updateSshConfig } = require("./src/ssh.js");
+const { askQuestion, askSshTag } = require("./src/prompts.js");
 const {
   exportConfig,
   setRemoteBranchForRepo,
@@ -116,7 +117,7 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme pem -f <path-to-pem>"));
   console.log(
     chalk.green(
-      "  qme git ssh-key [--home <path>] [--comment <email>] [--tag <name>]",
+      "  qme git ssh-key [--home <path>] [--host <hostname>] [--tag <name>]",
     ),
   );
   // console.log(chalk.green("  qme config export [output-path]"));
@@ -3140,24 +3141,43 @@ async function main() {
   }
 
   if (args[0] === "git" && args[1] === "ssh-key") {
+    const selectedUser = await selectGitUserForSsh();
+    if (!selectedUser) {
+      console.log(chalk.gray("⏹️ SSH key setup cancelled"));
+      return;
+    }
+
     const homeDir = getOptionValue(args, ["--home", "-H"]);
-    let comment = getOptionValue(args, ["--comment", "-c"]);
+    const hostName = getOptionValue(args, ["--host", "-h"])
+      || await askQuestion(chalk.yellow("🌐 Enter SSH host name (for example: github.com): "));
     let fileTag = getOptionValue(args, ["--tag", "-f"]);
 
-    if (!comment) {
-      comment = await askSshEmail(getDefaultSshEmail());
+    if (!hostName.trim()) {
+      console.log(chalk.red("❌ SSH host name cannot be empty"));
+      return;
     }
 
     if (!fileTag) {
       fileTag = await askSshTag();
     }
 
-    generateGitSshKey({
+    const generatedKey = generateGitSshKey({
       homeDir,
-      comment,
+      comment: selectedUser.email,
       fileTag,
       keyType: "ed25519",
     });
+    const sshConfigPath = updateSshConfig({
+      homeDir: generatedKey.homeDir,
+      hostName,
+      privateKeyPath: generatedKey.privateKeyPath,
+    });
+    console.log(
+      sshConfigPath.created
+        ? chalk.green("✅ SSH config profile created")
+        : chalk.yellow("ℹ️ SSH host already exists; config was not changed"),
+    );
+    console.log(chalk.blueBright("📄 SSH config:"), chalk.cyan(sshConfigPath.configPath));
     return;
   }
 
