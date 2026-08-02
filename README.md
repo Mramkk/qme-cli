@@ -101,6 +101,8 @@ qme config
 
 `qme run` detects Laravel, Flutter, and Node.js projects. For NestJS, Angular, React, Vite, Next.js, and generic Node.js projects, it shows actions for `dev`, `dev watch`, and `build`, then runs the matching package script (using npm, pnpm, or Yarn based on the lockfile). Successful workspaces are stored in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
 
+Sprint mail recipients are read from `system.sprintMail.to` and `system.sprintMail.cc` in an existing `qme-cli.json` file. Edit these arrays to change the recipients for `qme sprint-review` and `qme sprint-plan`.
+
 10. `qme config branch <branch-name>`
    Stores pull branch for current repo in qme config.
 

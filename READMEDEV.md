@@ -183,7 +183,7 @@ qme sprint-plan
 qme sprint-plan team@example.com
 ```
 
-- These commands create Outlook compose drafts with today's month in the subject.
+- These commands create Thunderbird compose drafts with today's month in the subject.
 - The recipient is optional.
 
 ### PEM Permissions
