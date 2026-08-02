@@ -94,6 +94,24 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
     });
 }
 
+function askPushAction() {
+    return new Promise(resolve => {
+        const rl = createRL();
+
+        console.log();
+        console.log(chalk.blue("🔹 Select push action:"));
+        console.log(chalk.green("  1) Push"));
+        console.log(chalk.green("  2) Force Push"));
+        rl.question(
+            chalk.yellow("👉 Choose an option (1/2) [default: 1]: "),
+            answer => {
+                rl.close();
+                resolve(answer.trim() === "2" ? "force-push" : "push");
+            },
+        );
+    });
+}
+
 /* ---------------- STASH MESSAGE ---------------- */
 function askStashMessage(defaultMessage) {
     return new Promise(resolve => {
@@ -387,6 +405,7 @@ module.exports = {
     askCommitMessage,
     askStashMessage,
     askFirstMenuAction,
+    askPushAction,
     askPostCommitAction,
     askAfterPullAction,
     askAfterPushMergeRequestAction,

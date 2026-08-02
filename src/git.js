@@ -6,6 +6,7 @@ const chalk = require("chalk");
 const os = require("os");
 const {
   askFirstMenuAction,
+  askPushAction,
   askCommitMessage,
   askStashMessage,
   askPostCommitAction,
@@ -1090,11 +1091,17 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
   }
 
   if (action === "push") {
+    const pushAction = await askPushAction();
     try {
-      pushCurrentBranch(currentBranch);
-      console.log(chalk.green("✅ Push completed"));
+      if (pushAction === "force-push") {
+        hardResetAndForcePush(currentBranch, remoteBranch);
+        console.log(chalk.green("✅ Force push completed"));
+      } else {
+        pushCurrentBranch(currentBranch);
+        console.log(chalk.green("✅ Push completed"));
+      }
     } catch (error) {
-      console.log(chalk.red(`❌ Push failed: ${formatGitError(error)}`));
+      console.log(chalk.red(`❌ ${pushAction === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
     }
     return;
   }
