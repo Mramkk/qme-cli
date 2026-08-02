@@ -17,10 +17,12 @@ npm i -g @ramkumarbedia/xqme
 qme git sync
 ```
 
+Runs an interactive Git workflow. With a clean working tree, the menu includes Pull, Push, Change pull branch, checkout, merge, reset, branch deletion, and Abort. Selecting Push opens a second menu for normal Push or Force Push; both push the current local branch without pulling first.
+
 ### Git users (multiple accounts)
 
 - `qme git users add` (aliases: `qme add git user`, `qme git user add`): prompts for name/email and saves it to the qme config user list.
-- `qme git users` (aliases: `qme git user switch`, `qme git users switch`): choose a saved user (or enter manually) and update global `git config --global user.name/user.email`. It can also clear saved credentials for a host so the next push/pull prompts login again.
+- `qme git users` (aliases: `qme git user switch`, `qme git users switch`): choose a saved user (or enter manually) and update global `git config --global user.name/user.email`. The menu also supports adding or removing saved users.
 - `qme git users remove` (alias: `qme git user remove`): remove a saved user from the qme config user list.
 
 Config file: `~/.qme-cli.json` (or legacy `~/.mycli.json`).
@@ -54,11 +56,11 @@ qme git open
 qme git remove
 ```
 
-8. `qme git ssh-key [--home <path>] [--comment <demo-email>] [--tag <name>]`
-   Generates an Ed25519 SSH key in your auto-detected platform home directory (`~/.ssh`).
+8. `qme git ssh-key [--home <path>] [--host <hostname>] [--tag <name>]`
+   Shows saved Git users with add/remove options, then uses the selected user’s email to generate an Ed25519 SSH key. It creates a matching profile in `~/.ssh/config` only when the host does not already exist.
 
 ```bash
-qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
+qme git ssh-key --host github.com --tag work
 ```
 
 9. `qme config`
@@ -68,7 +70,7 @@ qme git ssh-key --home "C:\Users\ADMIN" -c "demo@example.com" -f "oodle"
 qme config
 ```
 
-`qme run` detects Laravel, Flutter, and Node.js projects. For NestJS, Angular, React, Vite, Next.js, and generic Node.js projects, it shows actions for `dev`, `dev watch`, and `build`, then runs the matching package script (using npm, pnpm, or Yarn based on the lockfile). Successful workspaces are stored in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
+`qme run` detects Laravel, Flutter, and Node.js projects. For Node.js projects, it reads `package.json` and shows every available script, then runs the selected script using npm, pnpm, or Yarn based on the lockfile. Successful workspaces are stored in the config file under `system.projects` as an array of entries with `path`, `type`, and `updatedAt`. For Laravel projects, it also stores `phpVersion` and `laravelVersion`. If the same path is run again, its entry is refreshed.
 
 Sprint mail recipients are read from `system.sprintMail.to` and `system.sprintMail.cc` in an existing `qme-cli.json` file. Edit these arrays to change the recipients for `qme sprint-review` and `qme sprint-plan`.
 
@@ -87,7 +89,7 @@ qme git repo project id 123
 ```
 
 12. `qme config export [output-path]`
-    Exports qme config file backup.
+    Exports a qme config backup. Without an output path, the backup is written to the user’s `Downloads` folder.
 
 ```bash
 qme config export "D:\backup\mycli-config.json"
