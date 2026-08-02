@@ -1094,7 +1094,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     const pushAction = await askPushAction();
     try {
       if (pushAction === "force-push") {
-        hardResetAndForcePush(currentBranch, remoteBranch);
+        hardResetAndForcePush(currentBranch);
         console.log(chalk.green("✅ Force push completed"));
       } else {
         pushCurrentBranch(currentBranch);
@@ -1901,25 +1901,24 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
 
   try {
     if (action === "force-push") {
-      hardResetAndForcePush(currentBranch, remoteBranch);
-      console.log(chalk.green("✅ Hard reset and force push completed"));
+      hardResetAndForcePush(currentBranch);
+      console.log(chalk.green("✅ Force push completed"));
     } else {
       pushCurrentBranch(currentBranch);
       console.log(chalk.green("✅ Push completed"));
     }
     await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
-    console.log(chalk.red(`❌ ${action === "force-push" ? "Hard reset and force push" : "Push"} failed: ${formatGitError(error)}`));
+    console.log(chalk.red(`❌ ${action === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
   }
 }
 
-function hardResetAndForcePush(currentBranch, remoteBranch) {
+function hardResetAndForcePush(currentBranch) {
   console.log(
     chalk.yellow(
-      `⚠️ Hard resetting ${currentBranch} to ${REMOTE}/${remoteBranch} and force pushing...`,
+      `⚠️ Force pushing local branch ${currentBranch} without pulling or resetting...`,
     ),
   );
-  execSync(`git reset --hard ${REMOTE}/${remoteBranch}`, { stdio: "inherit" });
   execSync(`git push --force-with-lease ${REMOTE} ${currentBranch}`, { stdio: "inherit" });
 }
 
