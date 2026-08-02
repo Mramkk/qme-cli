@@ -25,6 +25,21 @@ const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, 
 
 const REMOTE = "origin";
 
+function normalizePullBranch(branch, currentBranch) {
+  let normalized = String(branch || "").trim();
+
+  if (normalized.toLowerCase().startsWith(`${REMOTE}/`)) {
+    normalized = normalized.slice(REMOTE.length + 1);
+  }
+
+  // A stored value such as origin/origin is a duplicated remote name, not a branch.
+  if (!normalized || normalized.toLowerCase() === REMOTE) {
+    return currentBranch || "main";
+  }
+
+  return normalized;
+}
+
 function askQuestion(questionText) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
@@ -1003,7 +1018,12 @@ async function runGitSync() {
 
   const repoConfig = loadOrCreateRepoConfig(repoUrl);
   const currentBranch = getCurrentBranch();
-  const remoteBranch = repoConfig.remoteBranch;
+  const configuredRemoteBranch = repoConfig.remoteBranch;
+  const remoteBranch = normalizePullBranch(configuredRemoteBranch, currentBranch);
+
+  if (remoteBranch !== configuredRemoteBranch) {
+    setRemoteBranchForRepo(repoUrl, remoteBranch);
+  }
 
   console.log(
     chalk.blueBright("🌿 Current branch:"),
