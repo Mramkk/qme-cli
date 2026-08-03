@@ -57,6 +57,8 @@ const { runMacXamppStart, runMacXamppStop } = require("./src/mac");
 const { runTimer } = require("./src/timer");
 const { runOpen } = require("./src/open");
 const { fixPemPermissions } = require("./src/pem");
+const { runSync } = require("./src/process");
+const { runWorkspace: runWorkspaceCommand } = require("./src/commands/run");
 
 function getCliVersion() {
   try {
@@ -334,10 +336,10 @@ function getProjectTypeLabel(profile) {
 
 function getPhpVersion(baseDir) {
   try {
-    const result = spawnSync("php", ["-v"], {
+    const result = runSync("php", ["-v"], {
       cwd: baseDir,
-      encoding: "utf8",
       windowsHide: true,
+      allowFailure: true,
     });
 
     if (result.error || result.status !== 0) {
@@ -351,10 +353,10 @@ function getPhpVersion(baseDir) {
       return match[1];
     }
 
-    const fallback = spawnSync("php", ["-r", "echo PHP_VERSION;"], {
+    const fallback = runSync("php", ["-r", "echo PHP_VERSION;"], {
       cwd: baseDir,
-      encoding: "utf8",
       windowsHide: true,
+      allowFailure: true,
     });
 
     if (fallback.error || fallback.status !== 0) {
@@ -384,20 +386,10 @@ function getNodePackageManager(baseDir) {
 }
 
 function runCommandInDir(command, args, cwd) {
-  const result = spawnSync(command, args, {
+  const result = runSync(command, args, {
     cwd,
     stdio: "inherit",
   });
-
-  if (result.error) {
-    console.log(chalk.red(`❌ Failed to run ${command}`));
-    console.log(chalk.yellow(result.error.message));
-    process.exit(1);
-  }
-
-  if (typeof result.status === "number" && result.status !== 0) {
-    process.exit(result.status);
-  }
 
   return true;
 }
@@ -881,58 +873,18 @@ async function runProjectList() {
 }
 
 async function runWorkspace() {
-  const baseDir = process.cwd();
-  const info = inspectRunEnvironment(baseDir);
-  const projectType = getProjectTypeLabel(info.profile);
-  const phpVersion = info.profile === "laravel" ? getPhpVersion(baseDir) : "";
-  const laravelVersion = info.profile === "laravel" ? getLaravelVersion(baseDir) : "";
-
-  console.log();
-  console.log(chalk.blueBright("qme run"));
-  console.log(chalk.gray(`Workspace: ${baseDir}`));
-  console.log(chalk.green(`Detected: ${projectType}`));
-  printRunChecklist(info.checks);
-
-  if (info.profile === "laravel") {
-    const dbConnection = String(info.envValues.DB_CONNECTION || "mysql").toLowerCase();
-    const dbHost = String(info.envValues.DB_HOST || "127.0.0.1").trim() || "127.0.0.1";
-    const dbPort = Number.parseInt(info.envValues.DB_PORT || "3306", 10) || 3306;
-
-    if (dbConnection === "mysql") {
-      console.log(chalk.cyan(`Waiting for database ${dbHost}:${dbPort}...`));
-      const dbReady = await waitForTcpPort(dbHost, dbPort, 45000, 1500);
-      if (!dbReady) {
-        console.log(chalk.red("❌ Database is not reachable yet"));
-        console.log(chalk.yellow(`Expected MySQL on ${dbHost}:${dbPort}`));
-        console.log(chalk.yellow("Start MySQL separately, or fix DB_HOST / DB_PORT in .env"));
-        return;
-      }
-    }
-
-    console.log(chalk.cyan("Starting Laravel server..."));
-    setLastRunProject({
-      path: baseDir,
-      type: projectType,
-      phpVersion,
-      laravelVersion,
-    });
-    runCommandInDir("php", ["artisan", "serve"], baseDir);
-    return;
-  }
-
-  if (info.profile === "flutter") {
-    console.log(chalk.cyan("Starting Flutter app..."));
-    setLastRunProject({ path: baseDir, type: projectType });
-    runCommandInDir("flutter", ["run"], baseDir);
-    return;
-  }
-
-  if (info.profile === "node" || info.profile === "nestjs" || info.profile === "angular" || info.profile === "react" || info.profile === "vite" || info.profile === "next") {
-    await runNodeProjectMenu(info, baseDir, projectType);
-    return;
-  }
-
-  console.log(chalk.yellow("ℹ️ Unknown project type"));
+  return runWorkspaceCommand({
+    baseDir: process.cwd(),
+    inspectRunEnvironment,
+    getProjectTypeLabel,
+    getPhpVersion,
+    getLaravelVersion,
+    printRunChecklist,
+    waitForTcpPort,
+    setLastRunProject,
+    runCommandInDir,
+    runNodeProjectMenu,
+  });
 }
 
 function buildSprintDraft({
