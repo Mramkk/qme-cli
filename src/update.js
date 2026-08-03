@@ -1,6 +1,6 @@
 const https = require("https");
-const { spawnSync } = require("child_process");
 const chalk = require("chalk");
+const { runSync } = require("./process");
 const {
     getLastUpdateCheckTime,
     setLastUpdateCheckTime,
@@ -79,7 +79,7 @@ async function runUpdateFlow({ force = false } = {}) {
             console.log();
 
             console.log(chalk.cyan("🚀 Installing the latest version globally..."));
-            const result = spawnSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
+            const result = runSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
                 stdio: "inherit"
             });
 
