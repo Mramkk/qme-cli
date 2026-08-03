@@ -178,13 +178,11 @@ qme timer 0.01 "notify demo" --popup
 
 ```bash
 qme sprint-review
-qme sprint-review team@example.com
 qme sprint-plan
-qme sprint-plan team@example.com
 ```
 
 - These commands create Thunderbird compose drafts with today's month in the subject.
-- The recipient is optional.
+- Recipients are read from `system.sprintMail.to` and `system.sprintMail.cc` in `qme-cli.json`.
 
 ### PEM Permissions
 

@@ -127,9 +127,9 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
   console.log(chalk.green("  qme xproj"));
   console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
-  console.log(chalk.green("  qme sprint-review [to-email]"));
+  console.log(chalk.green("  qme sprint-review"));
   console.log(chalk.gray("  Creates a Thunderbird sprint review mail draft"));
-  console.log(chalk.green("  qme sprint-plan [to-email]"));
+  console.log(chalk.green("  qme sprint-plan"));
   console.log(chalk.gray("  Creates a Thunderbird sprint plan mail draft"));
   // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
   // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
@@ -200,6 +200,14 @@ function formatShortDate(date = new Date()) {
     String(date.getMonth() + 1).padStart(2, "0"),
     String(date.getFullYear()).slice(-2),
   ].join("-");
+}
+
+function formatMonthName(date = new Date()) {
+  return date.toLocaleString("en-US", { month: "long" });
+}
+
+function encodeUrlValue(value) {
+  return encodeURIComponent(String(value || ""));
 }
 
 function formatDateOnly(value) {
@@ -330,7 +338,6 @@ function getPhpVersion(baseDir) {
       cwd: baseDir,
       encoding: "utf8",
       windowsHide: true,
-      shell: process.platform === "win32",
     });
 
     if (result.error || result.status !== 0) {
@@ -348,7 +355,6 @@ function getPhpVersion(baseDir) {
       cwd: baseDir,
       encoding: "utf8",
       windowsHide: true,
-      shell: process.platform === "win32",
     });
 
     if (fallback.error || fallback.status !== 0) {
@@ -381,7 +387,6 @@ function runCommandInDir(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,
     stdio: "inherit",
-    shell: process.platform === "win32",
   });
 
   if (result.error) {
@@ -409,7 +414,6 @@ function isProcessRunningOnWindows(imageName) {
   const result = spawnSync("tasklist", ["/FI", `IMAGENAME eq ${imageName}`], {
     encoding: "utf8",
     windowsHide: true,
-    shell: true,
   });
 
   const output = `${result.stdout || ""}\n${result.stderr || ""}`.toLowerCase();
@@ -943,29 +947,29 @@ function buildSprintDraft({
   }
 
   const { to: defaultRecipients, cc: defaultCcRecipients } = getSprintMailRecipients();
-  const toList = args.length
-    ? args.map((arg) => String(arg || "").trim()).filter(Boolean)
-    : defaultRecipients;
-  const to = toList.join(";");
-  const cc = defaultCcRecipients.join(";");
+  const toList = defaultRecipients;
+  const to = toList.join(",");
+  const cc = defaultCcRecipients.join(",");
   const monthName = formatMonthName();
   const subject = `${title} ( ${monthName} ) for This Week Backend`;
   const body = [
-    greeting,
-    "",
-    intro,
-    "",
-
-    "",
-    " Kindly let us know if any additional priorities need to be included",
-    "",
-  ].join("\r\n");
+    `<p>${greeting}</p>`,
+    `<p>${intro}</p>`,
+   
+    `<br>`,
+    `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">`,
+    `<thead style="background-color: #f2f2f2;"><tr><th align="left">Task</th><th align="left">Status</th></tr></thead>`,
+    `<tbody><tr><td>Task 1</td><td>Completed</td></tr></tbody>`,
+    `</table>`,
+    `<p>Kindly let us know if any additional priorities need to be included.</p>`,
+  ].join("");
 
   return [
     `mailto:${encodeUrlValue(to)}`,
     `?subject=${encodeUrlValue(subject)}`,
     `&body=${encodeUrlValue(body)}`,
     `&cc=${encodeUrlValue(cc)}`,
+    "&format=html",
   ].join("");
 }
 
@@ -2820,6 +2824,8 @@ function getTopLevelCommands() {
     "gchat",
     "hub",
     "mail",
+    "sprint-review",
+    "sprint-plan",
     "sprint",
     "notepad",
     "note",
@@ -3560,6 +3566,16 @@ async function main() {
 
   if (args[0] === "mail") {
     runMail();
+    return;
+  }
+
+  if (args[0] === "sprint-review") {
+    runSprintReviewMail(args.slice(1));
+    return;
+  }
+
+  if (args[0] === "sprint-plan") {
+    runSprintPlanMail(args.slice(1));
     return;
   }
 

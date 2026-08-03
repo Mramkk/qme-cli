@@ -154,13 +154,18 @@ function getMailtoComposeFields(composeUrl) {
         cc: normalizeRecipients(parsed.searchParams.get("cc")),
         subject: parsed.searchParams.get("subject") || "",
         body: parsed.searchParams.get("body") || "",
+        format: parsed.searchParams.get("format") || "",
     };
 
     return fields;
 }
 
 function escapeThunderbirdComposeValue(value) {
-    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, "\\n");
+    return String(value || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\r?\n/g, "\\n");
 }
 
 function buildThunderbirdCommand(composeUrl) {
