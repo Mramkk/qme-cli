@@ -80,8 +80,7 @@ async function runUpdateFlow({ force = false } = {}) {
 
             console.log(chalk.cyan("🚀 Installing the latest version globally..."));
             const result = spawnSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
-                stdio: "inherit",
-                shell: true
+                stdio: "inherit"
             });
 
             if (result.status === 0) {
