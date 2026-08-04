@@ -156,6 +156,7 @@ async function changeRemoteBranch(repoUrl, currentBranch, currentRemoteBranch) {
   return selected.name;
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for future guided pull flows
 function changePullBranchToSelectedBranch(repoUrl, currentBranch, selectedBranch) {
   const branchName = String(selectedBranch?.name || "").trim();
   if (!branchName) {
@@ -340,7 +341,6 @@ function deleteMacKeychainInternetPassword(options = {}) {
   let deleted = 0;
 
   for (const hint of protocolHints) {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const findArgs = ["find-internet-password", "-s", host];
       if (username) {
@@ -357,7 +357,7 @@ function deleteMacKeychainInternetPassword(options = {}) {
           `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
           { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
         );
-      } catch (error) {
+      } catch {
         break;
       }
 
@@ -376,7 +376,7 @@ function deleteMacKeychainInternetPassword(options = {}) {
           { stdio: ["inherit", "ignore", "pipe"] },
         );
         deleted += 1;
-      } catch (error) {
+      } catch {
         break;
       }
     }
@@ -400,7 +400,6 @@ function deleteMacKeychainGenericPassword(options = {}) {
   let attempted = 0;
   let deleted = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const findArgs = ["find-generic-password", "-s", service];
     if (username) {
@@ -414,7 +413,7 @@ function deleteMacKeychainGenericPassword(options = {}) {
         `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
         { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
       );
-    } catch (error) {
+    } catch {
       break;
     }
 
@@ -430,7 +429,7 @@ function deleteMacKeychainGenericPassword(options = {}) {
         { stdio: ["inherit", "ignore", "pipe"] },
       );
       deleted += 1;
-    } catch (error) {
+    } catch {
       break;
     }
   }
@@ -613,7 +612,6 @@ function clearStoreCredentialsForHost(hostname) {
     attempted += 1;
     try {
       if (!fs.existsSync(filePath)) {
-        // eslint-disable-next-line no-continue
         continue;
       }
       const content = fs.readFileSync(filePath, "utf8");
@@ -1309,6 +1307,7 @@ async function askCheckoutBranchSelection(branches) {
   return branches[selected - 1];
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for the legacy branch menu
 async function askBranchSelectionMenu(currentBranch) {
   const branches = getCheckoutBranchOptions(currentBranch);
   if (branches.length === 0) {
@@ -1484,6 +1483,7 @@ async function runGitReset() {
   }
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for the legacy log-reset flow
 async function runGitLogReset() {
   try {
     execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -1851,19 +1851,6 @@ function withoutTimestampPrefix(message) {
     return text;
   }
 
-  const now = new Date();
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const day = dayNames[now.getDay()];
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const date = String(now.getDate()).padStart(2, "0");
-  const hour24 = now.getHours();
-  const hour12 = hour24 % 12 || 12;
-  const hours = String(hour12).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const stamp = `[${day} ${year}-${month}-${date} ${hours}:${minutes}]`;
-
-  // return text ? `${stamp} ${text}` : stamp;
   return text;
 }
 
@@ -2358,7 +2345,6 @@ async function runGitUserSwitch() {
       ].filter(Boolean);
 
       for (const t of helperTargets) {
-        // eslint-disable-next-line no-continue
         if (!t) continue;
         gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t });
         gitCredentialEraseViaHelper({ helper: "credential-manager", ...t });

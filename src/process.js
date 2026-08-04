@@ -6,11 +6,14 @@ const { spawnSync } = require("child_process");
  * concatenated into a command string.
  */
 function runSync(command, args = [], options = {}) {
+  const stdio = process.env.QME_QUIET === "1" && options.stdio === "inherit"
+    ? "ignore"
+    : options.stdio;
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     encoding: options.encoding || "utf8",
     input: options.input,
-    stdio: options.stdio,
+    stdio,
     windowsHide: options.windowsHide ?? true,
     shell: false,
   });

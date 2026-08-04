@@ -11,6 +11,7 @@ async function runWorkspace({
   setLastRunProject,
   runCommandInDir,
   runNodeProjectMenu,
+  isExecutableAvailable,
 }) {
   const info = inspectRunEnvironment(baseDir);
   const projectType = getProjectTypeLabel(info.profile);
@@ -24,6 +25,12 @@ async function runWorkspace({
   printRunChecklist(info.checks);
 
   if (info.profile === "laravel") {
+    if (!isExecutableAvailable("php")) {
+      console.log(chalk.red("❌ PHP was not found in PATH"));
+      console.log(chalk.yellow("Install PHP or add it to PATH, then try again."));
+      return;
+    }
+
     const dbConnection = String(info.envValues.DB_CONNECTION || "mysql").toLowerCase();
     const dbHost = String(info.envValues.DB_HOST || "127.0.0.1").trim() || "127.0.0.1";
     const dbPort = Number.parseInt(info.envValues.DB_PORT || "3306", 10) || 3306;
@@ -46,6 +53,11 @@ async function runWorkspace({
   }
 
   if (info.profile === "flutter") {
+    if (!isExecutableAvailable("flutter")) {
+      console.log(chalk.red("❌ Flutter was not found in PATH"));
+      console.log(chalk.yellow("Install Flutter or add it to PATH, then try again."));
+      return;
+    }
     console.log(chalk.cyan("Starting Flutter app..."));
     setLastRunProject({ path: baseDir, type: projectType });
     runCommandInDir("flutter", ["run"], baseDir);

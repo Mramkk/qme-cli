@@ -58,7 +58,6 @@ function tryNotifyWindowsBalloon({ title, message }) {
 function tryNotifyNodeNotifier({ title, message }) {
     try {
         // Optional dependency if user has it installed.
-        // eslint-disable-next-line import/no-extraneous-dependencies, global-require
         const notifier = require("node-notifier");
         notifier.notify({ title, message, wait: false });
         return true;
