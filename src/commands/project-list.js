@@ -7,10 +7,43 @@ async function runProjectListCommand({
   askQuestion,
   prepareXamppForLaravelProject,
   tryOpenInVsCode,
+  openProjectPicker,
+  isWindows = false,
 }) {
   const projects = getSavedProjects();
   if (!projects.length) {
     console.log(chalk.yellow("ℹ️ No saved projects found in config"));
+    console.log();
+    return;
+  }
+
+  const pickedIndex = typeof openProjectPicker === "function" ? openProjectPicker(projects) : null;
+  if (isWindows) {
+    if (Number.isInteger(pickedIndex)) {
+      const selectedProject = projects[pickedIndex];
+      if (String(selectedProject.type || "").toLowerCase() === "laravel") {
+        const xamppReady = await prepareXamppForLaravelProject(selectedProject);
+        if (!xamppReady) return;
+      }
+      tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
+        newWindow: true,
+      });
+    }
+    return;
+  }
+
+  if (Number.isInteger(pickedIndex)) {
+    const selectedProject = projects[pickedIndex];
+    if (String(selectedProject.type || "").toLowerCase() === "laravel") {
+      const xamppReady = await prepareXamppForLaravelProject(selectedProject);
+      if (!xamppReady) {
+        console.log();
+        return;
+      }
+    }
+    tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
+      newWindow: true,
+    });
     console.log();
     return;
   }

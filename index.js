@@ -61,6 +61,7 @@ const { getPhpVersion } = require("./src/services/php");
 const { waitForTcpPort } = require("./src/services/network");
 const { isExecutableAvailable } = require("./src/services/validation");
 const { createVsCodeService } = require("./src/services/vscode");
+const { createWindowsProjectPicker } = require("./src/services/windows-project-picker");
 const {
   getProjectTypeLabel,
   getLaravelVersion,
@@ -87,6 +88,7 @@ const {
   resolveLastVsCodeProjectPath,
   tryOpenInVsCode,
 } = createVsCodeService({ spawnSync, chalk });
+const { openProjectPicker } = createWindowsProjectPicker();
 const runXamppProjects = createXamppProjectBrowser({
   resolveXamppHtdocsPath,
   askQuestion,
@@ -1176,9 +1178,11 @@ async function main() {
       getSavedProjects,
       formatShortDateOnly,
       askQuestion,
-      prepareXamppForLaravelProject,
-      tryOpenInVsCode,
-    }),
+    prepareXamppForLaravelProject,
+    tryOpenInVsCode,
+    openProjectPicker,
+    isWindows: process.platform === "win32",
+  }),
     open: (_args) => runOpenCommand(args, runOpen),
     ip: () => runIpCommand(getCurrentIpAddress),
     pa: (_args) => runArtisanCommand(args, runArtisan),
