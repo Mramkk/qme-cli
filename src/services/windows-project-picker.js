@@ -71,14 +71,20 @@ $section.Location = New-Object Drawing.Point(26, 98)
 $section.AutoSize = $true
 $form.Controls.Add($section)
 
+function ConvertTo-DisplayLabel([string]$value) {
+  if ([string]::IsNullOrWhiteSpace($value)) { return '' }
+  return $value.Substring(0, 1).ToUpperInvariant() + $value.Substring(1)
+}
+
 for ($i = 0; $i -lt $projects.Count; $i++) {
   $project = $projects[$i]
-  $name = Split-Path ([string]$project.path.TrimEnd('\\', '/')) -Leaf
+  $name = ConvertTo-DisplayLabel (Split-Path ([string]$project.path.TrimEnd('\\', '/')) -Leaf)
+  $type = ConvertTo-DisplayLabel ([string]$project.type)
   $environment = @()
   if ($project.phpVersion) { $environment += 'PHP ' + [string]$project.phpVersion }
   if ($project.laravelVersion) { $environment += 'Laravel ' + [string]$project.laravelVersion }
   $item = New-Object Windows.Forms.ListViewItem((' {0}. {1}' -f ($i + 1), $name))
-  [void]$item.SubItems.Add([string]$project.type)
+  [void]$item.SubItems.Add($type)
   [void]$item.SubItems.Add(($environment -join '  |  '))
   [void]$item.SubItems.Add([string]$project.updatedAt)
   [void]$list.Items.Add($item)
