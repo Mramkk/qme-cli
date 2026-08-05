@@ -22,9 +22,28 @@ const {
   getProjectRepoUrl,
   getCurrentBranch,
 } = require("./utils.js");
-const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath, setRemoteBranchForRepo } = require("./config.js");
+const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath, setRemoteBranchForRepo, setProjectIdForRepo } = require("./config.js");
 
 const REMOTE = "origin";
+
+function isGitLabRepo(repoUrl) {
+  const value = String(repoUrl || "").trim().toLowerCase();
+  return value.includes("gitlab.") || value.includes("gitlab.com") || value.startsWith("git@gitlab:");
+}
+
+async function setGitLabProjectId(repoUrl) {
+  while (true) {
+    const rawProjectId = await askQuestion(chalk.magenta("🆔 Enter GitLab project ID: "));
+    const projectId = Number(rawProjectId);
+
+    if (Number.isInteger(projectId) && projectId > 0) {
+      setProjectIdForRepo(repoUrl, projectId);
+      return projectId;
+    }
+
+    console.log(chalk.red("❌ Valid numeric project ID required"));
+  }
+}
 
 function normalizePullBranch(branch, currentBranch) {
   let normalized = String(branch || "").trim();
@@ -1053,7 +1072,7 @@ async function runGitSync() {
     );
 
     // With a clean working tree, always allow pull from the first menu.
-  const action = await askFirstMenuAction(false, true);
+  const action = await askFirstMenuAction(false, true, isGitLabRepo(repoUrl));
   await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   return;
   }
@@ -1101,6 +1120,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     } catch (error) {
       console.log(chalk.red(`❌ ${pushAction === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
     }
+    return;
+  }
+
+  if (action === "set-project-id") {
+    await setGitLabProjectId(repoUrl);
     return;
   }
 
@@ -1726,6 +1750,7 @@ function getLocalCommitCount(currentBranch) {
   try {
     const out = execSync(`git rev-list --count ${upstreamRef}..HEAD`, {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     return Number(out) || 0;
   } catch {
