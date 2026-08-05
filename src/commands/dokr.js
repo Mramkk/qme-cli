@@ -1,0 +1,144 @@
+const chalk = require("chalk");
+const fs = require("fs");
+const path = require("path");
+
+const DOCKER_ACTIONS = ["Containers", "Images", "Compose"];
+const COMPOSE_ACTIONS = ["Up", "Down", "Up --build", "Up -d", "Up --build -d"];
+
+function printDokrMenu() {
+  console.log();
+  console.log(chalk.blue("🐳 Select Docker action:"));
+  DOCKER_ACTIONS.forEach((action, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${action}`));
+  });
+}
+
+function printComposeMenu() {
+  console.log();
+  console.log(chalk.blue("🐳 Select Compose action:"));
+  COMPOSE_ACTIONS.forEach((action, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${action}`));
+  });
+}
+
+function isDockerReady(spawnSync) {
+  const result = spawnSync("docker", ["info"], {
+    stdio: "ignore",
+    shell: false,
+  });
+  return result.status === 0;
+}
+
+function getDockerDesktopPath() {
+  const candidates = [
+    process.env.ProgramFiles
+      ? path.join(process.env.ProgramFiles, "Docker", "Docker", "Docker Desktop.exe")
+      : null,
+    process.env.LOCALAPPDATA
+      ? path.join(process.env.LOCALAPPDATA, "Docker", "Docker", "Docker Desktop.exe")
+      : null,
+  ].filter(Boolean);
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+async function ensureDockerReady(spawnSync, spawnProcess = spawnSync) {
+  if (isDockerReady(spawnSync)) return true;
+
+  if (process.platform !== "win32") {
+    console.log(chalk.red("❌ Docker is not running. Start the Docker daemon and try again."));
+    return false;
+  }
+
+  const dockerDesktopPath = getDockerDesktopPath();
+  if (!dockerDesktopPath) {
+    console.log(chalk.red("❌ Docker Desktop was not found on this computer."));
+    return false;
+  }
+
+  console.log(chalk.yellow("🐳 Docker is not running. Starting Docker Desktop..."));
+  const dockerDesktopProcess = spawnProcess(dockerDesktopPath, [], {
+    stdio: "ignore",
+    shell: false,
+    detached: true,
+    windowsHide: true,
+  });
+  dockerDesktopProcess?.unref?.();
+
+  console.log(chalk.gray("⏳ Waiting for Docker Engine..."));
+  for (let attempt = 0; attempt < 45; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (isDockerReady(spawnSync)) {
+      console.log(chalk.green("✅ Docker Engine is ready"));
+      return true;
+    }
+  }
+
+  console.log(chalk.red("❌ Docker Engine did not become ready in time."));
+  return false;
+}
+
+async function runDocker(spawnSync, args) {
+  const result = spawnSync("docker", args, { stdio: "inherit", shell: false });
+  if (result.error) {
+    console.log(chalk.red("❌ Docker is not installed or is unavailable"));
+  }
+  return result;
+}
+
+async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
+  if (args[1]) {
+    console.log(chalk.yellow("Usage: qme dokr"));
+    return;
+  }
+
+  if (!(await ensureDockerReady(spawnSync, spawn))) return;
+
+  printDokrMenu();
+  const choice = await askQuestion(chalk.yellow("👉 Choose an option (1/2/3) [Enter to abort]: "));
+  const selected = Number.parseInt(choice, 10);
+
+  if (!choice || selected === 0) {
+    console.log(chalk.gray("⏹️ Docker menu cancelled"));
+    return;
+  }
+  if (!Number.isInteger(selected) || selected < 1 || selected > DOCKER_ACTIONS.length) {
+    console.log(chalk.red("❌ Invalid selection"));
+    return;
+  }
+
+  if (selected === 1) return runDocker(spawnSync, ["ps", "-a"]);
+  if (selected === 2) return runDocker(spawnSync, ["images"]);
+  if (selected === 3) {
+    printComposeMenu();
+    const composeChoice = await askQuestion(
+      chalk.yellow("👉 Choose an option (1/2/3/4/5) [Enter to abort]: "),
+    );
+    const composeSelected = Number.parseInt(composeChoice, 10);
+
+    if (!composeChoice || composeSelected === 0) {
+      console.log(chalk.gray("⏹️ Compose menu cancelled"));
+      return;
+    }
+    if (
+      !Number.isInteger(composeSelected) ||
+      composeSelected < 1 ||
+      composeSelected > COMPOSE_ACTIONS.length
+    ) {
+      console.log(chalk.red("❌ Invalid selection"));
+      return;
+    }
+
+    const composeArgsByOption = {
+      1: ["compose", "up"],
+      2: ["compose", "down"],
+      3: ["compose", "up", "--build"],
+      4: ["compose", "up", "-d"],
+      5: ["compose", "up", "--build", "-d"],
+    };
+    const composeArgs = composeArgsByOption[composeSelected];
+    await runDocker(spawnSync, composeArgs);
+  }
+}
+
+module.exports = { runDokrCommand, printDokrMenu };

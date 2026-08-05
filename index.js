@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const chalk = require("chalk");
-const { execSync, spawnSync } = require("child_process");
+const { execSync, spawn, spawnSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -78,16 +78,12 @@ const {
   waitForReady: waitForXamppReady,
   waitForStopped: waitForXamppStopped,
 } = require("./src/services/xampp");
-const {
-  getXamppPathCandidates,
-  resolveXamppHtdocsPath,
-  resolveXamppPhpIniPath,
-} = createXamppPathResolver({ getXamppPath, chalk });
-const {
-  parseFileUriToPath,
-  resolveLastVsCodeProjectPath,
-  tryOpenInVsCode,
-} = createVsCodeService({ spawnSync, chalk });
+const { getXamppPathCandidates, resolveXamppHtdocsPath, resolveXamppPhpIniPath } =
+  createXamppPathResolver({ getXamppPath, chalk });
+const { parseFileUriToPath, resolveLastVsCodeProjectPath, tryOpenInVsCode } = createVsCodeService({
+  spawnSync,
+  chalk,
+});
 const { openProjectPicker } = createWindowsProjectPicker();
 const runXamppProjects = createXamppProjectBrowser({
   resolveXamppHtdocsPath,
@@ -95,14 +91,13 @@ const runXamppProjects = createXamppProjectBrowser({
   tryOpenInVsCode,
   chalk,
 });
-const { runXamppStartByPlatform, runXamppStopByPlatform } =
-  createXamppPlatformOperations({
-    runMacXamppStart,
-    runMacXamppStop,
-    runWindowsXamppStart: runXamppStart,
-    runWindowsXamppStop: runXamppStop,
-    chalk,
-  });
+const { runXamppStartByPlatform, runXamppStopByPlatform } = createXamppPlatformOperations({
+  runMacXamppStart,
+  runMacXamppStop,
+  runWindowsXamppStart: runXamppStart,
+  runWindowsXamppStop: runXamppStop,
+  chalk,
+});
 const runXamppSwitch = createXamppSwitch({
   askQuestion,
   chalk,
@@ -136,6 +131,7 @@ const { runArtisanCommand } = require("./src/commands/artisan");
 const { dispatchCommand } = require("./src/commands/registry");
 const { runPilotCommand } = require("./src/commands/pilot");
 const { runProjectListCommand } = require("./src/commands/project-list");
+const { runDokrCommand } = require("./src/commands/dokr");
 const { createAdbService } = require("./src/services/adb");
 const { createFlutterService } = require("./src/services/flutter");
 const { createNotesService } = require("./src/services/notes");
@@ -155,10 +151,7 @@ const {
   runMysqlPermission,
 } = require("./src/services/mysql");
 const mysqlHelpers = createMysqlHelpers(getXamppPathCandidates);
-const {
-  resolveMysqlExecutable,
-  resolveMysqldumpExecutable,
-} = mysqlHelpers;
+const { resolveMysqlExecutable, resolveMysqldumpExecutable } = mysqlHelpers;
 const {
   createAction: MYSQL_CREATE_DATABASE_ACTION,
   getMysqlDatabases,
@@ -223,6 +216,8 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  App run, build, devices, clean, and common Flutter targets"));
   console.log(chalk.green("  qme adb"));
   console.log(chalk.gray("  Connect Android device to ADB over Wi-Fi using USB first"));
+  console.log(chalk.green("  qme dokr"));
+  console.log(chalk.gray("  Interactive Docker actions menu"));
   console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
   console.log(chalk.green("  qme config"));
   console.log(chalk.gray("  Opens qme config file in VS Code"));
@@ -233,11 +228,7 @@ function printHelp(options = {}) {
   console.log(chalk.gray("  Lists saved projects from qme config"));
   console.log(chalk.green("  qme open <url>"));
   console.log(chalk.green("  qme pem -f <path-to-pem>"));
-  console.log(
-    chalk.green(
-      "  qme git ssh-key [--home <path>] [--host <hostname>] [--tag <name>]",
-    ),
-  );
+  console.log(chalk.green("  qme git ssh-key [--home <path>] [--host <hostname>] [--tag <name>]"));
   // console.log(chalk.green("  qme config export [output-path]"));
   // console.log(chalk.green("  qme config branch <branch-name>"));
   // console.log(chalk.green("  qme xampp start|stop|switch <version>"));
@@ -257,9 +248,7 @@ function printHelp(options = {}) {
   console.log(chalk.green("  qme git users"));
   console.log(chalk.green("  qme git users add"));
   console.log(chalk.green("  qme git users remove"));
-  console.log(
-    chalk.gray("  Aliases: qme git user switch|add|remove, qme add git user"),
-  );
+  console.log(chalk.gray("  Aliases: qme git user switch|add|remove, qme add git user"));
   console.log();
 
   console.log(chalk.blueBright("Help:"));
@@ -321,11 +310,7 @@ async function prepareXamppForLaravelProject(selectedProject) {
 
   const xamppRunning = await isXamppRunning();
   if (xamppRunning) {
-    console.log(
-      chalk.cyan(
-        "Stopping XAMPP before switching versions...",
-      ),
-    );
+    console.log(chalk.cyan("Stopping XAMPP before switching versions..."));
     await runXamppStopByPlatform();
   }
 
@@ -376,11 +361,12 @@ async function runNodeProjectMenu(info, baseDir, projectType) {
     console.log(chalk.green(`  ${index + 1}) ${script}`));
   });
 
-  const answer = (await askQuestion(chalk.yellow(`👉 Choose an option (1-${scripts.length}) [Enter to abort]: `))).trim();
+  const answer = (
+    await askQuestion(chalk.yellow(`👉 Choose an option (1-${scripts.length}) [Enter to abort]: `))
+  ).trim();
   const selectedIndex = Number.parseInt(answer, 10) - 1;
-  const selectedScript = Number.isInteger(selectedIndex) && selectedIndex >= 0
-    ? scripts[selectedIndex]
-    : "";
+  const selectedScript =
+    Number.isInteger(selectedIndex) && selectedIndex >= 0 ? scripts[selectedIndex] : "";
   if (!selectedScript) {
     console.log(chalk.gray("⏹️ Project run aborted"));
     return;
@@ -407,12 +393,7 @@ async function runWorkspace() {
   });
 }
 
-function buildSprintDraft({
-  args = [],
-  title,
-  greeting,
-  intro,
-}) {
+function buildSprintDraft({ args = [], title, greeting, intro }) {
   if (process.platform !== "win32") {
     console.log(chalk.red("❌ This command is only available on Windows"));
     process.exit(1);
@@ -427,7 +408,7 @@ function buildSprintDraft({
   const body = [
     `<p>${greeting}</p>`,
     `<p>${intro}</p>`,
-   
+
     `<br>`,
     `<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%;">`,
     `<thead style="background-color: #f2f2f2;"><tr><th align="left">Task</th><th align="left">Status</th></tr></thead>`,
@@ -499,7 +480,6 @@ function resolveSqlExportPath(inputPath, databaseName) {
   return resolvedPath;
 }
 
-
 async function askMysqlDatabaseName(promptText = "🗄️ Enter new database name: ") {
   const databaseName = await askQuestion(chalk.magenta(promptText));
   if (!databaseName) {
@@ -509,9 +489,6 @@ async function askMysqlDatabaseName(promptText = "🗄️ Enter new database nam
 
   return databaseName.trim();
 }
-
-
-
 
 async function runMysqlMenu(args) {
   const mysqlPath = resolveMysqlExecutable();
@@ -529,7 +506,7 @@ async function runMysqlMenu(args) {
   ].includes(firstArg);
 
   if (firstArg === "create") {
-    createMysqlDatabase(mysqlPath, args.slice(2).join(" ") || await askMysqlDatabaseName());
+    createMysqlDatabase(mysqlPath, args.slice(2).join(" ") || (await askMysqlDatabaseName()));
     return;
   }
 
@@ -539,9 +516,7 @@ async function runMysqlMenu(args) {
     return;
   }
 
-  const databaseName = firstArg && !firstArgIsAction
-    ? firstArg
-    : await askMysqlDatabase(databases);
+  const databaseName = firstArg && !firstArgIsAction ? firstArg : await askMysqlDatabase(databases);
 
   if (databaseName === MYSQL_CREATE_DATABASE_ACTION) {
     createMysqlDatabase(mysqlPath, await askMysqlDatabaseName());
@@ -553,7 +528,7 @@ async function runMysqlMenu(args) {
     process.exit(1);
   }
 
-  const action = firstArgIsAction ? firstArg : args[2] || await askMysqlAction(databaseName);
+  const action = firstArgIsAction ? firstArg : args[2] || (await askMysqlAction(databaseName));
   const fileArgIndex = firstArgIsAction ? 2 : 3;
 
   if (action === "import" || action === "inport") {
@@ -561,7 +536,9 @@ async function runMysqlMenu(args) {
       console.log(chalk.red(`❌ Refusing to import into protected database: ${databaseName}`));
       process.exit(1);
     }
-    const sqlFileInput = args.slice(fileArgIndex).join(" ") || await askQuestion(chalk.magenta("📄 Enter .sql file path: "));
+    const sqlFileInput =
+      args.slice(fileArgIndex).join(" ") ||
+      (await askQuestion(chalk.magenta("📄 Enter .sql file path: ")));
     if (!sqlFileInput) {
       console.log(chalk.yellow("ℹ️ Import cancelled"));
       process.exit(0);
@@ -572,8 +549,16 @@ async function runMysqlMenu(args) {
 
   if (action === "export") {
     const defaultExportPath = getMysqlExportDefaultPath(databaseName);
-    const outputInput = args.slice(fileArgIndex).join(" ") || await askQuestion(chalk.magenta(`💾 Enter export .sql file path [default: ${defaultExportPath}]: `));
-    exportMysqlDatabaseService(resolveMysqldumpExecutable(), databaseName, resolveSqlExportPath(outputInput, databaseName));
+    const outputInput =
+      args.slice(fileArgIndex).join(" ") ||
+      (await askQuestion(
+        chalk.magenta(`💾 Enter export .sql file path [default: ${defaultExportPath}]: `),
+      ));
+    exportMysqlDatabaseService(
+      resolveMysqldumpExecutable(),
+      databaseName,
+      resolveSqlExportPath(outputInput, databaseName),
+    );
     return;
   }
 
@@ -619,7 +604,9 @@ async function runAdbConnect(target) {
       process.exit(1);
     }
 
-    const portValue = (await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))).trim();
+    const portValue = (
+      await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))
+    ).trim();
     const port = portValue || "5555";
 
     if (!/^\d+$/.test(port)) {
@@ -629,7 +616,9 @@ async function runAdbConnect(target) {
 
     connectTarget = `${ipAddress}:${port}`;
   } else if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(connectTarget)) {
-    const portValue = (await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))).trim();
+    const portValue = (
+      await askQuestion(chalk.magenta("🔌 Enter ADB port [default: 5555]: "))
+    ).trim();
     const port = portValue || "5555";
 
     if (!/^\d+$/.test(port)) {
@@ -647,7 +636,11 @@ async function runAdbConnect(target) {
   const connectOutput = `${connectResult.result.stdout || ""}\n${connectResult.result.stderr || ""}`;
   if (!/connected to|already connected to/i.test(connectOutput)) {
     console.log(chalk.red("❌ Wireless connection failed"));
-    console.log(chalk.yellow(String(connectOutput).trim() || "adb connect did not report a successful connection."));
+    console.log(
+      chalk.yellow(
+        String(connectOutput).trim() || "adb connect did not report a successful connection.",
+      ),
+    );
     process.exit(1);
   }
 
@@ -670,7 +663,9 @@ async function runAdbWifiConnect() {
   const adbPath = resolveAdbExecutable();
 
   console.log(chalk.blueBright("ADB over Wi-Fi setup"));
-  console.log(chalk.gray("Make sure the phone is connected by USB first and USB debugging is authorized."));
+  console.log(
+    chalk.gray("Make sure the phone is connected by USB first and USB debugging is authorized."),
+  );
 
   const devices = getAdbDeviceList(adbPath);
   const onlineDevices = devices.filter((device) => device.status === "device");
@@ -684,7 +679,9 @@ async function runAdbWifiConnect() {
 
   if (onlineDevices.length === 0) {
     console.log(chalk.red("❌ No Android device found"));
-    console.log(chalk.yellow("Connect the device by USB and confirm `adb devices` shows a `device` status."));
+    console.log(
+      chalk.yellow("Connect the device by USB and confirm `adb devices` shows a `device` status."),
+    );
     process.exit(1);
   }
 
@@ -699,18 +696,26 @@ async function runAdbWifiConnect() {
     expectSuccessText: "restarting in tcp mode",
   });
 
-  const finalIp = (await askQuestion(
-    chalk.magenta("📶 Enter device IP address: "),
-  )).trim();
+  const finalIp = (await askQuestion(chalk.magenta("📶 Enter device IP address: "))).trim();
 
   if (!finalIp) {
     console.log(chalk.red("❌ Invalid or unreachable IP address"));
-    console.log(chalk.yellow("Run `adb shell ip route` or `adb shell ifconfig` again and try a valid IPv4 address."));
+    console.log(
+      chalk.yellow(
+        "Run `adb shell ip route` or `adb shell ifconfig` again and try a valid IPv4 address.",
+      ),
+    );
     process.exit(1);
   }
 
-  console.log(chalk.blueBright("Connect the computer and device to the same Wi-Fi network, then disconnect the USB cable when ready."));
-  const connectAnswer = await askQuestion(chalk.yellow("👉 Press Enter to continue with wireless connection: "));
+  console.log(
+    chalk.blueBright(
+      "Connect the computer and device to the same Wi-Fi network, then disconnect the USB cable when ready.",
+    ),
+  );
+  const connectAnswer = await askQuestion(
+    chalk.yellow("👉 Press Enter to continue with wireless connection: "),
+  );
   void connectAnswer;
 
   const connectResult = runAdbCommand(adbPath, ["connect", `${finalIp}:5555`], {
@@ -720,7 +725,11 @@ async function runAdbWifiConnect() {
   const connectOutput = `${connectResult.result.stdout || ""}\n${connectResult.result.stderr || ""}`;
   if (!/connected to|already connected to/i.test(connectOutput)) {
     console.log(chalk.red("❌ Wireless connection failed"));
-    console.log(chalk.yellow(String(connectOutput).trim() || "adb connect did not report a successful connection."));
+    console.log(
+      chalk.yellow(
+        String(connectOutput).trim() || "adb connect did not report a successful connection.",
+      ),
+    );
     console.log(chalk.yellow("Common causes:"));
     console.log(chalk.yellow("  - Device not found"));
     console.log(chalk.yellow("  - Both devices are not on the same Wi-Fi network"));
@@ -912,11 +921,7 @@ function levenshteinDistance(a, b) {
 
     for (let j = 1; j <= right.length; j += 1) {
       const cost = left[i - 1] === right[j - 1] ? 0 : 1;
-      curr[j] = Math.min(
-        prev[j] + 1,
-        curr[j - 1] + 1,
-        prev[j - 1] + cost,
-      );
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
     }
 
     prev = curr;
@@ -926,7 +931,9 @@ function levenshteinDistance(a, b) {
 }
 
 function getCommandSuggestions(input, candidates, limit = 5) {
-  const value = String(input || "").trim().toLowerCase();
+  const value = String(input || "")
+    .trim()
+    .toLowerCase();
   if (!value) {
     return [];
   }
@@ -950,9 +957,7 @@ function printSuggestions(input, candidates, options = {}) {
     return false;
   }
 
-  console.log(
-    chalk.yellow(`Did you mean ${label}${suggestions.length > 1 ? "s" : ""}?`),
-  );
+  console.log(chalk.yellow(`Did you mean ${label}${suggestions.length > 1 ? "s" : ""}?`));
   for (const suggestion of suggestions) {
     console.log(chalk.gray(`  ${prefix}${suggestion}`));
   }
@@ -980,6 +985,7 @@ function getTopLevelCommands() {
     "mysql",
     "flutter",
     "adb",
+    "dokr",
     "run",
     "init",
     "win",
@@ -1028,7 +1034,6 @@ async function main() {
   let args = configureOutput([...rawArgs]);
   args = expandAliases(args);
 
-
   if (
     args.length > 0 &&
     args[0] !== "help" &&
@@ -1052,12 +1057,7 @@ async function main() {
     console.log(JSON.stringify(args, null, 2));
     return;
   }
-  if (
-    args.length === 0 ||
-    args[0] === "help" ||
-    args.includes("--help") ||
-    args.includes("-h")
-  ) {
+  if (args.length === 0 || args[0] === "help" || args.includes("--help") || args.includes("-h")) {
     printHelp();
     return;
   }
@@ -1107,7 +1107,13 @@ async function main() {
       const explicitTokens = sepIndex >= 0 ? tokens : directCmdTokens;
       const shouldUseUrlShortcut = Boolean(urlAliasTarget);
 
-      if (!name || (!shouldUseUrlShortcut && sepIndex < 0 && directCmdTokens.length === 0 && tokens.length === 0)) {
+      if (
+        !name ||
+        (!shouldUseUrlShortcut &&
+          sepIndex < 0 &&
+          directCmdTokens.length === 0 &&
+          tokens.length === 0)
+      ) {
         console.log(chalk.red("❌ Usage: qme alias add <name> -- <command...>"));
         console.log(chalk.gray("   or: qme alias add <name> --value <url>"));
         console.log(
@@ -1127,9 +1133,7 @@ async function main() {
       const ok = addOrUpdateAlias(name, finalTokens);
       if (!ok) {
         console.log(chalk.red("❌ Invalid alias name or command"));
-        console.log(
-          chalk.yellow("Alias name must match: [a-zA-Z0-9][a-zA-Z0-9:_-]*"),
-        );
+        console.log(chalk.yellow("Alias name must match: [a-zA-Z0-9][a-zA-Z0-9:_-]*"));
         process.exit(1);
       }
 
@@ -1171,26 +1175,36 @@ async function main() {
     process.exit(1);
   }
 
-  if (await dispatchCommand(args, {
-    run: async () => runWorkspace(),
-    pilot: () => runPilotCommand({ inspectRunEnvironment, printRunChecklist }),
-    proj: () => runProjectListCommand({
-      getSavedProjects,
-      formatShortDateOnly,
-      askQuestion,
-    prepareXamppForLaravelProject,
-    tryOpenInVsCode,
-    openProjectPicker,
-    isWindows: process.platform === "win32",
-  }),
-    open: (_args) => runOpenCommand(args, runOpen),
-    ip: () => runIpCommand(getCurrentIpAddress),
-    pa: (_args) => runArtisanCommand(args, runArtisan),
-  })) return;
+  if (
+    await dispatchCommand(args, {
+      run: async () => runWorkspace(),
+      pilot: () => runPilotCommand({ inspectRunEnvironment, printRunChecklist }),
+      proj: () =>
+        runProjectListCommand({
+          getSavedProjects,
+          formatShortDateOnly,
+          askQuestion,
+          prepareXamppForLaravelProject,
+          tryOpenInVsCode,
+          openProjectPicker,
+          isWindows: process.platform === "win32",
+        }),
+      open: (_args) => runOpenCommand(args, runOpen),
+      ip: () => runIpCommand(getCurrentIpAddress),
+      pa: (_args) => runArtisanCommand(args, runArtisan),
+    })
+  )
+    return;
 
   if (await dispatchCommand(args, loadPluginCommands())) return;
   if (args[0] === "pem") {
-    await runPemCommand({ args, getOptionValue, askQuestion, parseFileUriToPath, fixPemPermissions });
+    await runPemCommand({
+      args,
+      getOptionValue,
+      askQuestion,
+      parseFileUriToPath,
+      fixPemPermissions,
+    });
     return;
   }
 
@@ -1206,7 +1220,11 @@ async function main() {
     return;
   }
 
-  if (args[0] === "gsync" || args[0] === "git" || (args[0] === "add" && args[1] === "git" && args[2] === "user")) {
+  if (
+    args[0] === "gsync" ||
+    args[0] === "git" ||
+    (args[0] === "add" && args[1] === "git" && args[2] === "user")
+  ) {
     const handled = await runGitCommand(args, {
       runGitSync,
       runGitReset,
@@ -1281,41 +1299,58 @@ async function main() {
     return;
   }
 
-  if (await runLifecycleCommand(args, {
-    runUpdateFlow,
-    initializeRepo,
-    getOptionValue,
-    runXamppStop,
-    runWindowsCommand,
-  })) return;
+  if (args[0] === "dokr") {
+    await runDokrCommand(args, { askQuestion, spawn, spawnSync });
+    return;
+  }
+
+  if (
+    await runLifecycleCommand(args, {
+      runUpdateFlow,
+      initializeRepo,
+      getOptionValue,
+      runXamppStop,
+      runWindowsCommand,
+    })
+  )
+    return;
 
   if (runWindowsAliasCommand(args, runWindowsCommand)) return;
 
-  if (runNavigationCommand(args, {
-    openCurrentPathByPlatform,
-    resolveLastVsCodeProjectPath,
-    tryOpenInVsCode,
-  })) return;
+  if (
+    runNavigationCommand(args, {
+      openCurrentPathByPlatform,
+      resolveLastVsCodeProjectPath,
+      tryOpenInVsCode,
+    })
+  )
+    return;
 
-  if (runDesktopCommand(args, {
-    runGoogleChat,
-    runHubstaff,
-    runMail,
-    runSprintReviewMail,
-    runSprintPlanMail,
-    runNotepad,
-    getDesktopNotesPath,
-    appendNoteText,
-  })) return;
+  if (
+    runDesktopCommand(args, {
+      runGoogleChat,
+      runHubstaff,
+      runMail,
+      runSprintReviewMail,
+      runSprintPlanMail,
+      runNotepad,
+      getDesktopNotesPath,
+      appendNoteText,
+    })
+  )
+    return;
 
-  if (await runXamppCommand(args, {
-    runXamppStartByPlatform,
-    runXamppStopByPlatform,
-    runXamppSwitch,
-    resolveXamppPhpIniPath,
-    tryOpenInVsCode,
-    runXamppProjects,
-  })) return;
+  if (
+    await runXamppCommand(args, {
+      runXamppStartByPlatform,
+      runXamppStopByPlatform,
+      runXamppSwitch,
+      resolveXamppPhpIniPath,
+      tryOpenInVsCode,
+      runXamppProjects,
+    })
+  )
+    return;
 
   // console.log(chalk.blue("Usage:"));
   // console.log("  qme pa serve");
@@ -1363,22 +1398,3 @@ async function main() {
 main().catch(handleCliError);
 // testingx
 // git push --set-upstream origin my-pc
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
