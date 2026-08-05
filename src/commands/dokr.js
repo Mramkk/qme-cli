@@ -2,7 +2,7 @@ const chalk = require("chalk");
 const fs = require("fs");
 const path = require("path");
 
-const DOCKER_ACTIONS = ["Containers", "Images", "Compose"];
+const DOCKER_ACTIONS = ["Containers", "Images", "Compose", "View logs", "Open shell"];
 const COMPOSE_ACTIONS = ["Up", "Down", "Up --build", "Up -d", "Up --build -d"];
 
 function printDokrMenu() {
@@ -86,6 +86,50 @@ async function runDocker(spawnSync, args) {
   return result;
 }
 
+function getRunningContainers(spawnSync) {
+  const result = spawnSync("docker", ["ps", "--format", "{{.ID}}|{{.Names}}"], {
+    encoding: "utf8",
+    shell: false,
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+
+  if (result.error || result.status !== 0) return [];
+
+  return String(result.stdout || "")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const [id, name] = line.split("|");
+      return { id, name };
+    })
+    .filter((container) => container.id && container.name);
+}
+
+async function selectRunningContainer(askQuestion, spawnSync) {
+  const containers = getRunningContainers(spawnSync);
+  if (!containers.length) {
+    console.log(chalk.yellow("ℹ️ No running containers found"));
+    return null;
+  }
+
+  console.log();
+  console.log(chalk.blue("🐳 Select a running container:"));
+  containers.forEach((container, index) => {
+    console.log(chalk.green(`  ${index + 1}) ${container.name} (${container.id})`));
+  });
+
+  const choice = await askQuestion(
+    chalk.yellow(`👉 Choose a container (1/${containers.length}) [Enter to abort]: `),
+  );
+  const selected = Number.parseInt(choice, 10);
+  if (!Number.isInteger(selected) || selected < 1 || selected > containers.length) {
+    console.log(chalk.gray("⏹️ Container selection cancelled"));
+    return null;
+  }
+
+  return containers[selected - 1].id;
+}
+
 async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
   if (args[1]) {
     console.log(chalk.yellow("Usage: qme dokr"));
@@ -95,7 +139,9 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
   if (!(await ensureDockerReady(spawnSync, spawn))) return;
 
   printDokrMenu();
-  const choice = await askQuestion(chalk.yellow("👉 Choose an option (1/2/3) [Enter to abort]: "));
+  const choice = await askQuestion(
+    chalk.yellow("👉 Choose an option (1/2/3/4/5) [Enter to abort]: "),
+  );
   const selected = Number.parseInt(choice, 10);
 
   if (!choice || selected === 0) {
@@ -138,7 +184,13 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
     };
     const composeArgs = composeArgsByOption[composeSelected];
     await runDocker(spawnSync, composeArgs);
+    return;
   }
+
+  const container = await selectRunningContainer(askQuestion, spawnSync);
+  if (!container) return;
+  if (selected === 4) return runDocker(spawnSync, ["logs", "--tail", "100", container]);
+  if (selected === 5) return runDocker(spawnSync, ["exec", "-it", container, "sh"]);
 }
 
 module.exports = { runDokrCommand, printDokrMenu };
