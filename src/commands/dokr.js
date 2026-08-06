@@ -2,8 +2,8 @@ const chalk = require("chalk");
 const fs = require("fs");
 const path = require("path");
 
-const DOCKER_ACTIONS = ["Containers", "Images", "Compose", "View logs", "Open shell"];
-const COMPOSE_ACTIONS = ["Up", "Down", "Up --build", "Up -d", "Up --build -d"];
+const DOCKER_ACTIONS = ["Containers", "Images", "Volumes", "Compose", "View logs", "Open shell"];
+const COMPOSE_ACTIONS = ["Up", "Up -d", "Up --build", "Up --build -d", "Down"];
 
 function printDokrMenu() {
   console.log();
@@ -79,6 +79,7 @@ async function ensureDockerReady(spawnSync, spawnProcess = spawnSync) {
 }
 
 async function runDocker(spawnSync, args) {
+  console.log(chalk.cyan(`🐳 Running: docker ${args.join(" ")}`));
   const result = spawnSync("docker", args, { stdio: "inherit", shell: false });
   if (result.error) {
     console.log(chalk.red("❌ Docker is not installed or is unavailable"));
@@ -140,7 +141,7 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
 
   printDokrMenu();
   const choice = await askQuestion(
-    chalk.yellow("👉 Choose an option (1/2/3/4/5) [Enter to abort]: "),
+    chalk.yellow("👉 Choose an option (1/2/3/4/5/6) [Enter to abort]: "),
   );
   const selected = Number.parseInt(choice, 10);
 
@@ -155,7 +156,8 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
 
   if (selected === 1) return runDocker(spawnSync, ["ps", "-a"]);
   if (selected === 2) return runDocker(spawnSync, ["images"]);
-  if (selected === 3) {
+  if (selected === 3) return runDocker(spawnSync, ["volume", "ls"]);
+  if (selected === 4) {
     printComposeMenu();
     const composeChoice = await askQuestion(
       chalk.yellow("👉 Choose an option (1/2/3/4/5) [Enter to abort]: "),
@@ -177,10 +179,10 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
 
     const composeArgsByOption = {
       1: ["compose", "up"],
-      2: ["compose", "down"],
+      2: ["compose", "up", "-d"],
       3: ["compose", "up", "--build"],
-      4: ["compose", "up", "-d"],
-      5: ["compose", "up", "--build", "-d"],
+      4: ["compose", "up", "--build", "-d"],
+      5: ["compose", "down"],
     };
     const composeArgs = composeArgsByOption[composeSelected];
     await runDocker(spawnSync, composeArgs);
@@ -189,8 +191,33 @@ async function runDokrCommand(args, { askQuestion, spawnSync, spawn }) {
 
   const container = await selectRunningContainer(askQuestion, spawnSync);
   if (!container) return;
-  if (selected === 4) return runDocker(spawnSync, ["logs", "--tail", "100", container]);
-  if (selected === 5) return runDocker(spawnSync, ["exec", "-it", container, "sh"]);
+  if (selected === 5) return runDocker(spawnSync, ["logs", "--tail", "100", container]);
+  if (selected === 6) {
+    printShellMenu();
+    const shellChoice = await askQuestion(
+      chalk.yellow("👉 Choose a shell (1/2) [Enter to abort]: "),
+    );
+    const shellSelected = Number.parseInt(shellChoice, 10);
+
+    if (!shellChoice || shellSelected === 0) {
+      console.log(chalk.gray("⏹️ Shell menu cancelled"));
+      return;
+    }
+    if (shellSelected !== 1 && shellSelected !== 2) {
+      console.log(chalk.red("❌ Invalid shell selection"));
+      return;
+    }
+
+    const shell = shellSelected === 1 ? "bash" : "sh";
+    return runDocker(spawnSync, ["exec", "-it", container, shell]);
+  }
+}
+
+function printShellMenu() {
+  console.log();
+  console.log(chalk.blue("🐚 Select shell:"));
+  console.log(chalk.green("  1) bash"));
+  console.log(chalk.green("  2) sh"));
 }
 
 module.exports = { runDokrCommand, printDokrMenu };
