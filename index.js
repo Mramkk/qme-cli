@@ -1069,6 +1069,130 @@ async function main() {
   }
 
   if (args[0] === "alias") {
+    if (!args[1]) {
+      while (true) {
+        console.log();
+        console.log(chalk.blueBright("Alias menu"));
+        console.log(chalk.green("  1) Aliases"));
+        console.log(chalk.green("  2) Add"));
+        console.log(chalk.green("  3) Open"));
+        console.log(chalk.green("  4) Remove"));
+        console.log(chalk.green("  q) Exit"));
+
+        const choice = (await askQuestion(chalk.yellow("👉 Choose an option: ")))
+          .trim()
+          .toLowerCase();
+        if (!choice || choice === "q" || choice === "quit" || choice === "exit") return;
+
+        if (choice === "1") {
+          const aliases = getAliases();
+          const names = Object.keys(aliases).sort((a, b) => a.localeCompare(b));
+          if (!names.length) {
+            console.log(chalk.yellow("ℹ️ No aliases configured"));
+          } else {
+            console.log(chalk.blueBright("Aliases:"));
+            for (const name of names) {
+              console.log(
+                chalk.green(`  ${name}`),
+                chalk.gray("->"),
+                chalk.cyan(formatAliasTokens(aliases[name])),
+              );
+            }
+          }
+          continue;
+        }
+
+        if (choice === "2") {
+          const name = (await askQuestion(chalk.yellow("👉 Alias name: "))).trim();
+          const target = (await askQuestion(chalk.yellow("👉 Command or URL: "))).trim();
+          const tokens = looksLikeUrl(target)
+            ? ["open", target]
+            : target.split(/\s+/).filter(Boolean);
+          if (
+            !name ||
+            !tokens.length ||
+            RESERVED_ALIAS_NAMES.has(name) ||
+            !addOrUpdateAlias(name, tokens)
+          ) {
+            console.log(chalk.red("❌ Invalid alias name or command"));
+          } else {
+            console.log(chalk.green(`✅ Alias saved: ${name}`));
+          }
+          continue;
+        }
+
+        if (choice === "3") {
+          const aliases = getAliases();
+          const names = Object.keys(aliases).sort((a, b) => a.localeCompare(b));
+          if (!names.length) {
+            console.log(chalk.yellow("ℹ️ No aliases configured"));
+            continue;
+          }
+
+          console.log(chalk.blueBright("Select an alias to open:"));
+          names.forEach((name, index) => {
+            console.log(chalk.green(`  ${index + 1}) ${name}`));
+          });
+          const answer = (
+            await askQuestion(
+              chalk.yellow(`👉 Choose an alias (1-${names.length}) [Enter to cancel]: `),
+            )
+          ).trim();
+          const selectedIndex = Number.parseInt(answer, 10) - 1;
+          const name = Number.isInteger(selectedIndex) ? names[selectedIndex] : "";
+          const tokens = name ? aliases[name] : [];
+          if (!tokens.length) {
+            console.log(chalk.gray("⏹️ Alias opening cancelled"));
+            continue;
+          }
+
+          if (tokens[0] === "open" && tokens[1]) {
+            runOpen(tokens[1]);
+            console.log(chalk.green(`✅ Opened: ${name}`));
+          } else {
+            console.log(
+              chalk.yellow(`ℹ️ Alias '${name}' is a command: ${formatAliasTokens(tokens)}`),
+            );
+          }
+          continue;
+        }
+
+        if (choice === "4") {
+          const aliases = getAliases();
+          const names = Object.keys(aliases).sort((a, b) => a.localeCompare(b));
+          if (!names.length) {
+            console.log(chalk.yellow("ℹ️ No aliases configured"));
+            continue;
+          }
+
+          console.log(chalk.blueBright("Select an alias to remove:"));
+          names.forEach((name, index) => {
+            console.log(chalk.green(`  ${index + 1}) ${name}`));
+          });
+          const answer = (
+            await askQuestion(
+              chalk.yellow(`👉 Choose an alias (1-${names.length}) [Enter to cancel]: `),
+            )
+          ).trim();
+          const selectedIndex = Number.parseInt(answer, 10) - 1;
+          const name = Number.isInteger(selectedIndex) ? names[selectedIndex] : "";
+          if (!name) {
+            console.log(chalk.gray("⏹️ Alias removal cancelled"));
+            continue;
+          }
+
+          console.log(
+            removeAlias(name)
+              ? chalk.green(`✅ Alias removed: ${name}`)
+              : chalk.yellow(`ℹ️ Alias not found: ${name}`),
+          );
+          continue;
+        }
+
+        console.log(chalk.yellow("⚠️ Choose 1, 2, 3, 4, or q"));
+      }
+    }
+
     const sub = args[1] || "list";
 
     if (sub === "list" || sub === "ls") {
@@ -1348,6 +1472,9 @@ async function main() {
       resolveXamppPhpIniPath,
       tryOpenInVsCode,
       runXamppProjects,
+      askQuestion,
+      getXamppPath,
+      setXamppPath,
     })
   )
     return;

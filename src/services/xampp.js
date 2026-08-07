@@ -262,7 +262,7 @@ function createXamppSwitch({
       );
       if (!answer) {
         console.log(chalk.yellow("ℹ️ Switch cancelled"));
-        process.exit(0);
+        return;
       }
       const selectedIndex = Number.parseInt(answer, 10);
       if (
