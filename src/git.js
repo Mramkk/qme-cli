@@ -1010,6 +1010,12 @@ async function runGitRemove() {
 }
 
 async function runGitSync() {
+  while (true) {
+    await runGitSyncOnce();
+  }
+}
+
+async function runGitSyncOnce() {
   /* ---------- ENSURE GIT REPO ---------- */
   try {
     execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -1894,7 +1900,6 @@ async function showPullMenu(remoteBranch, currentBranch, repoUrl, projectId) {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Pull skipped"));
   }
 
-  await runGitSync();
 }
 
 /* ---------- PULL → PUSH | SKIP ---------- */

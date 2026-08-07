@@ -65,10 +65,11 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
                 abortOption = 10;
             }
             console.log(chalk.green(`  ${abortOption}) Abort`));
+            const optionHint = allowSetProjectId
+                ? "0/1/2/3/4/5/6/7/8/9"
+                : "0/1/2/3/4/5/6/7/8";
             rl.question(
-                chalk.yellow(
-                    `👉 Choose an option (0/1/2/3/4/5/6/7/${allowSetProjectId ? "8/9" : "8"}) [default: 0]: `,
-                ),
+                chalk.yellow(`👉 Choose an option (${optionHint}) [default: 0]: `),
                 answer => {
                     rl.close();
                     const value = answer.trim();
