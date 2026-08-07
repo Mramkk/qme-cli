@@ -2007,16 +2007,15 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
   }
 }
 
-/* ---------- LAST COMMITS TABLE ---------- */
+/* ---------- COMMIT LOG ---------- */
 function showLastCommits() {
   try {
     console.log();
-    // Reflog shows recent HEAD movements (commits, pulls, rebases, resets, checkouts).
-    execSync("git reflog", {
+    execSync("git log", {
       stdio: "inherit",
     });
   } catch {
-    console.log(chalk.red("❌ Could not read git reflog"));
+    console.log(chalk.red("❌ Could not read git log"));
   }
 }
 
