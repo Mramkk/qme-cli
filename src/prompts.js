@@ -59,15 +59,16 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
             console.log(chalk.green("  6) Reset hard"));
             console.log(chalk.green("  7) Delete branch"));
             console.log(chalk.green("  8) Log"));
-            let abortOption = 9;
+            console.log(chalk.green("  9) Ref Log"));
+            let abortOption = 10;
             if (allowSetProjectId) {
-                console.log(chalk.green("  9) Set GitLab project ID"));
-                abortOption = 10;
+                console.log(chalk.green("  10) Set GitLab project ID"));
+                abortOption = 11;
             }
             console.log(chalk.green(`  ${abortOption}) Abort`));
             const optionHint = allowSetProjectId
-                ? "0/1/2/3/4/5/6/7/8/9"
-                : "0/1/2/3/4/5/6/7/8";
+                ? "0/1/2/3/4/5/6/7/8/9/10"
+                : "0/1/2/3/4/5/6/7/8/9";
             rl.question(
                 chalk.yellow(`👉 Choose an option (${optionHint}) [default: 0]: `),
                 answer => {
@@ -83,7 +84,8 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
                     else if (value === "6") resolve("reset-hard-hash");
                     else if (value === "7") resolve("delete-branch");
                     else if (value === "8") resolve("log");
-                    else if (allowSetProjectId && value === "9") resolve("set-project-id");
+                    else if (value === "9") resolve("reflog");
+                    else if (allowSetProjectId && value === "10") resolve("set-project-id");
                     else resolve("abort");
                 }
             );

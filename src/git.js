@@ -1139,6 +1139,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "reflog") {
+    showRefLog();
+    return;
+  }
+
   if (action === "checkout") {
     await checkoutBranchFromMenu(currentBranch);
     return;
@@ -2014,8 +2019,17 @@ function showLastCommits() {
     execSync("git log", {
       stdio: "inherit",
     });
+  } catch {}
+}
+
+function showRefLog() {
+  try {
+    console.log();
+    execSync("git reflog", {
+      stdio: "inherit",
+    });
   } catch {
-    console.log(chalk.red("❌ Could not read git log"));
+    console.log(chalk.red("❌ Could not read git reflog"));
   }
 }
 
