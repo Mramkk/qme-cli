@@ -2064,6 +2064,7 @@ function renderCommitLog(author) {
   try {
     const args = [
       "log",
+      "--reverse",
       "--date-order",
       "--date=format:%a %b %d %H:%M:%S %Y %z",
       "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
