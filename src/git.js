@@ -2079,20 +2079,17 @@ function renderCommitLog(author) {
 
     console.log();
     console.log(chalk.blueBright("📜 Git commit log"));
-    console.log(chalk.gray("─".repeat(72)));
+    console.log(chalk.gray("─".repeat(56)));
 
     String(result.stdout || "")
       .split(/\r?\n/)
       .filter(Boolean)
-      .forEach((line) => {
-        const [hash, author, email, date, subject, decorations] = line.split("\t");
-        const refLabel = decorations ? ` (${decorations})` : "";
+      .forEach((line, index) => {
+        const [hash, author, email, date, subject] = line.split("\t");
 
-        console.log(chalk.yellow(`commit ${hash}`) + chalk.cyan(refLabel));
-        console.log(`Author: ${author} <${email}>`);
-        console.log(`Date:   ${date}`);
-        console.log();
-        console.log(`    ${subject}`);
+        console.log(`${index + 1}) ${chalk.yellow(hash.slice(0, 8))}  ${subject}`);
+        console.log(`   👤 ${author} <${email}>`);
+        console.log(`   📅 ${date}`);
         console.log();
       });
   } catch {}
