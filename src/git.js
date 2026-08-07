@@ -22,9 +22,28 @@ const {
   getProjectRepoUrl,
   getCurrentBranch,
 } = require("./utils.js");
-const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath, setRemoteBranchForRepo } = require("./config.js");
+const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, getConfigPath, setRemoteBranchForRepo, setProjectIdForRepo } = require("./config.js");
 
 const REMOTE = "origin";
+
+function isGitLabRepo(repoUrl) {
+  const value = String(repoUrl || "").trim().toLowerCase();
+  return value.includes("gitlab.") || value.includes("gitlab.com") || value.startsWith("git@gitlab:");
+}
+
+async function setGitLabProjectId(repoUrl) {
+  while (true) {
+    const rawProjectId = await askQuestion(chalk.magenta("🆔 Enter GitLab project ID: "));
+    const projectId = Number(rawProjectId);
+
+    if (Number.isInteger(projectId) && projectId > 0) {
+      setProjectIdForRepo(repoUrl, projectId);
+      return projectId;
+    }
+
+    console.log(chalk.red("❌ Valid numeric project ID required"));
+  }
+}
 
 function normalizePullBranch(branch, currentBranch) {
   let normalized = String(branch || "").trim();
@@ -156,6 +175,7 @@ async function changeRemoteBranch(repoUrl, currentBranch, currentRemoteBranch) {
   return selected.name;
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for future guided pull flows
 function changePullBranchToSelectedBranch(repoUrl, currentBranch, selectedBranch) {
   const branchName = String(selectedBranch?.name || "").trim();
   if (!branchName) {
@@ -340,7 +360,6 @@ function deleteMacKeychainInternetPassword(options = {}) {
   let deleted = 0;
 
   for (const hint of protocolHints) {
-    // eslint-disable-next-line no-constant-condition
     while (true) {
       const findArgs = ["find-internet-password", "-s", host];
       if (username) {
@@ -357,7 +376,7 @@ function deleteMacKeychainInternetPassword(options = {}) {
           `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
           { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
         );
-      } catch (error) {
+      } catch {
         break;
       }
 
@@ -376,7 +395,7 @@ function deleteMacKeychainInternetPassword(options = {}) {
           { stdio: ["inherit", "ignore", "pipe"] },
         );
         deleted += 1;
-      } catch (error) {
+      } catch {
         break;
       }
     }
@@ -400,7 +419,6 @@ function deleteMacKeychainGenericPassword(options = {}) {
   let attempted = 0;
   let deleted = 0;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const findArgs = ["find-generic-password", "-s", service];
     if (username) {
@@ -414,7 +432,7 @@ function deleteMacKeychainGenericPassword(options = {}) {
         `security ${findArgs.map((a) => `"${String(a).replace(/"/g, '\\"')}"`).join(" ")}`,
         { stdio: ["ignore", "pipe", "pipe"], encoding: "utf8" },
       );
-    } catch (error) {
+    } catch {
       break;
     }
 
@@ -430,7 +448,7 @@ function deleteMacKeychainGenericPassword(options = {}) {
         { stdio: ["inherit", "ignore", "pipe"] },
       );
       deleted += 1;
-    } catch (error) {
+    } catch {
       break;
     }
   }
@@ -613,7 +631,6 @@ function clearStoreCredentialsForHost(hostname) {
     attempted += 1;
     try {
       if (!fs.existsSync(filePath)) {
-        // eslint-disable-next-line no-continue
         continue;
       }
       const content = fs.readFileSync(filePath, "utf8");
@@ -1055,7 +1072,7 @@ async function runGitSync() {
     );
 
     // With a clean working tree, always allow pull from the first menu.
-  const action = await askFirstMenuAction(false, true);
+  const action = await askFirstMenuAction(false, true, isGitLabRepo(repoUrl));
   await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   return;
   }
@@ -1103,6 +1120,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     } catch (error) {
       console.log(chalk.red(`❌ ${pushAction === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
     }
+    return;
+  }
+
+  if (action === "set-project-id") {
+    await setGitLabProjectId(repoUrl);
     return;
   }
 
@@ -1309,6 +1331,7 @@ async function askCheckoutBranchSelection(branches) {
   return branches[selected - 1];
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for the legacy branch menu
 async function askBranchSelectionMenu(currentBranch) {
   const branches = getCheckoutBranchOptions(currentBranch);
   if (branches.length === 0) {
@@ -1484,6 +1507,7 @@ async function runGitReset() {
   }
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for the legacy log-reset flow
 async function runGitLogReset() {
   try {
     execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -1726,6 +1750,7 @@ function getLocalCommitCount(currentBranch) {
   try {
     const out = execSync(`git rev-list --count ${upstreamRef}..HEAD`, {
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
     }).trim();
     return Number(out) || 0;
   } catch {
@@ -1851,19 +1876,6 @@ function withoutTimestampPrefix(message) {
     return text;
   }
 
-  const now = new Date();
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const day = dayNames[now.getDay()];
-  const year = String(now.getFullYear());
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const date = String(now.getDate()).padStart(2, "0");
-  const hour24 = now.getHours();
-  const hour12 = hour24 % 12 || 12;
-  const hours = String(hour12).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const stamp = `[${day} ${year}-${month}-${date} ${hours}:${minutes}]`;
-
-  // return text ? `${stamp} ${text}` : stamp;
   return text;
 }
 
@@ -2358,7 +2370,6 @@ async function runGitUserSwitch() {
       ].filter(Boolean);
 
       for (const t of helperTargets) {
-        // eslint-disable-next-line no-continue
         if (!t) continue;
         gitCredentialEraseViaHelper({ helper: "credential-osxkeychain", ...t });
         gitCredentialEraseViaHelper({ helper: "credential-manager", ...t });

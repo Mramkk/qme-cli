@@ -24,7 +24,7 @@ function askCommitMessage() {
 }
 
 /* ---------------- FIRST MENU ---------------- */
-function askFirstMenuAction(allowCommit = true, allowPull = false) {
+function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProjectId = false) {
     return new Promise(resolve => {
         const rl = createRL();
 
@@ -58,9 +58,16 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
             console.log(chalk.green("  5) Merge branch"));
             console.log(chalk.green("  6) Reset hard"));
             console.log(chalk.green("  7) Delete branch"));
-            console.log(chalk.green("  8) Abort"));
+            let abortOption = 8;
+            if (allowSetProjectId) {
+                console.log(chalk.green("  8) Set GitLab project ID"));
+                abortOption = 9;
+            }
+            console.log(chalk.green(`  ${abortOption}) Abort`));
             rl.question(
-                chalk.yellow("👉 Choose an option (0/1/2/3/4/5/6/7/8) [default: 0]: "),
+                chalk.yellow(
+                    `👉 Choose an option (0/1/2/3/4/5/6/7/${allowSetProjectId ? "8/9" : "8"}) [default: 0]: `,
+                ),
                 answer => {
                     rl.close();
                     const value = answer.trim();
@@ -73,6 +80,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false) {
                     else if (value === "5") resolve("merge-branch");
                     else if (value === "6") resolve("reset-hard-hash");
                     else if (value === "7") resolve("delete-branch");
+                    else if (allowSetProjectId && value === "8") resolve("set-project-id");
                     else resolve("abort");
                 }
             );

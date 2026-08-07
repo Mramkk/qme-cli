@@ -7,9 +7,23 @@
     "qme": "./index.js"
   },
   "license": "MIT",
-  "keywords": ["cli", "node", "cross-platform", "tool"],
-  "files": ["index.js", "src"],
+  "keywords": [
+    "cli",
+    "node",
+    "cross-platform",
+    "tool"
+  ],
+  "files": [
+    "index.js",
+    "src"
+  ],
   "scripts": {
+    "test": "node --test",
+    "check": "npm test && npm run lint && npm run format:check",
+    "version:check": "node scripts/check-version.js",
+    "lint": "eslint index.js src test",
+    "format": "prettier --write src/commands src/services src/errors.js test",
+    "format:check": "prettier --check src/commands src/services src/errors.js test",
     "build:win": "pkg index.js --targets node18-win-x64 --output dist/qme-win.exe"
   },
   "pkg": {
@@ -25,5 +39,9 @@
   },
   "dependencies": {
     "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.0",
+    "prettier": "^3.9.6"
   }
 }

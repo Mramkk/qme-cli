@@ -225,3 +225,54 @@ Aliases are stored in your config file (`~/.qme-cli.json`, or legacy `~/.mycli.j
   }
 }
 ```
+
+## Development
+
+Install dependencies and run the checks:
+
+```bash
+npm install
+npm test
+npm run lint
+npm run format:check
+```
+
+Use `qme --verbose <command>` or set `QME_VERBOSE=1` to include diagnostic
+details when a command fails. Use `qme --quiet <command>` to suppress normal
+progress output while preserving errors.
+
+Shell completion helpers are available in `completions/qme.bash` and
+`completions/qme.ps1`.
+
+### Release checklist
+
+```bash
+npm run check
+npm run version:check
+npm version minor --no-git-tag-version
+git add package.json package-lock.json CHANGELOG.md
+git commit -m "chore: release vX.Y.Z"
+npm publish --access public
+```
+
+### Plugins
+
+Plugins are opt-in CommonJS modules. Set `QME_PLUGINS` to one or more plugin
+paths separated by the platform path separator:
+
+```powershell
+$env:QME_PLUGINS = "C:\qme-plugins\hello.js"
+qme hello
+```
+
+A plugin can export either a command map or an object with a `commands` map:
+
+```js
+module.exports = {
+  commands: {
+    hello: async () => console.log("Hello from qme plugin"),
+  },
+};
+```
+
+Built-in commands always take precedence over plugins.
