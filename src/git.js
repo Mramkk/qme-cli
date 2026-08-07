@@ -1435,7 +1435,7 @@ async function mergeBranchFromMenu(currentBranch) {
     return;
   }
 
-  const result = spawnSync("git", ["merge", selected.name], {
+  const result = spawnSync("git", ["merge", "--no-edit", selected.name], {
     stdio: "inherit",
     shell: false,
   });
