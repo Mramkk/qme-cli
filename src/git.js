@@ -1128,6 +1128,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "log") {
+    showLastCommits();
+    return;
+  }
+
   if (action === "checkout") {
     await checkoutBranchFromMenu(currentBranch);
     return;

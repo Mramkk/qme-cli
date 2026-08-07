@@ -58,10 +58,11 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
             console.log(chalk.green("  5) Merge branch"));
             console.log(chalk.green("  6) Reset hard"));
             console.log(chalk.green("  7) Delete branch"));
-            let abortOption = 8;
+            console.log(chalk.green("  8) Log"));
+            let abortOption = 9;
             if (allowSetProjectId) {
-                console.log(chalk.green("  8) Set GitLab project ID"));
-                abortOption = 9;
+                console.log(chalk.green("  9) Set GitLab project ID"));
+                abortOption = 10;
             }
             console.log(chalk.green(`  ${abortOption}) Abort`));
             rl.question(
@@ -80,7 +81,8 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
                     else if (value === "5") resolve("merge-branch");
                     else if (value === "6") resolve("reset-hard-hash");
                     else if (value === "7") resolve("delete-branch");
-                    else if (allowSetProjectId && value === "8") resolve("set-project-id");
+                    else if (value === "8") resolve("log");
+                    else if (allowSetProjectId && value === "9") resolve("set-project-id");
                     else resolve("abort");
                 }
             );
