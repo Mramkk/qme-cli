@@ -2044,7 +2044,7 @@ async function showLastCommits() {
 
     const selectedIndex = Number.parseInt(answer, 10);
     if (selectedIndex === 1) {
-      renderCommitLog();
+      await renderCommitLog();
       return;
     }
 
@@ -2054,17 +2054,16 @@ async function showLastCommits() {
       return;
     }
 
-    renderCommitLog(`${selectedAuthor.name} <${selectedAuthor.email}>`);
+    await renderCommitLog(`${selectedAuthor.name} <${selectedAuthor.email}>`);
   } catch {
     return;
   }
 }
 
-function renderCommitLog(author) {
+async function renderCommitLog(author) {
   try {
     const args = [
       "log",
-      "--reverse",
       "--date-order",
       "--date=format:%a %b %d %H:%M:%S %Y %z",
       "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
@@ -2079,21 +2078,39 @@ function renderCommitLog(author) {
 
     if (result.error || result.status !== 0) return;
 
-    console.log();
-    console.log(chalk.blueBright("📜 Git commit log"));
-    console.log(chalk.gray("─".repeat(56)));
-
-    String(result.stdout || "")
+    const commits = String(result.stdout || "")
       .split(/\r?\n/)
-      .filter(Boolean)
-      .forEach((line, index) => {
-        const [hash, author, email, date, subject] = line.split("\t");
+      .filter(Boolean);
+    const pageSize = 10;
+    let end = commits.length;
+    let pageNumber = 1;
+
+    while (end > 0) {
+      const start = Math.max(0, end - pageSize);
+      const page = commits.slice(start, end).reverse();
+
+      console.log();
+      console.log(chalk.blueBright(`📜 Git commit log (page ${pageNumber})`));
+      console.log(chalk.gray("─".repeat(56)));
+
+      page.forEach((line, index) => {
+        const [hash, commitAuthor, email, date, subject] = line.split("\t");
 
         console.log(`${index + 1}) ${chalk.yellow(hash.slice(0, 8))}  ${subject}`);
-        console.log(`   👤 ${author} <${email}>`);
+        console.log(`   👤 ${commitAuthor} <${email}>`);
         console.log(`   📅 ${date}`);
         console.log();
       });
+
+      end = start;
+      if (end === 0) return;
+
+      const nextPage = (await askQuestion("👉 Press Enter for 10 more logs (q to stop): "))
+        .trim()
+        .toLowerCase();
+      if (nextPage === "q" || nextPage === "quit" || nextPage === "exit") return;
+      pageNumber += 1;
+    }
   } catch {}
 }
 
