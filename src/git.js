@@ -1893,6 +1893,8 @@ async function showPullMenu(remoteBranch, currentBranch, repoUrl, projectId) {
   } else {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Pull skipped"));
   }
+
+  await runGitSync();
 }
 
 /* ---------- PULL → PUSH | SKIP ---------- */
@@ -1912,7 +1914,6 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askAfterPullAction(currentBranch);
   if (action === "skip") {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Push skipped"));
-    process.exit(0);
     return;
   }
 
