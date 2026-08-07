@@ -2015,10 +2015,36 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
 /* ---------- COMMIT LOG ---------- */
 function showLastCommits() {
   try {
+    const result = spawnSync(
+      "git",
+      [
+        "log",
+        "--date=format:%a %b %d %H:%M:%S %Y %z",
+        "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
+      ],
+      { encoding: "utf8", windowsHide: true },
+    );
+
+    if (result.error || result.status !== 0) return;
+
     console.log();
-    execSync("git log", {
-      stdio: "inherit",
-    });
+    console.log(chalk.blueBright("📜 Git commit log"));
+    console.log(chalk.gray("─".repeat(72)));
+
+    String(result.stdout || "")
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .forEach((line) => {
+        const [hash, author, email, date, subject, decorations] = line.split("\t");
+        const refLabel = decorations ? ` (${decorations})` : "";
+
+        console.log(chalk.yellow(`commit ${hash}`) + chalk.cyan(refLabel));
+        console.log(`Author: ${author} <${email}>`);
+        console.log(`Date:   ${date}`);
+        console.log();
+        console.log(`    ${subject}`);
+        console.log();
+      });
   } catch {}
 }
 
