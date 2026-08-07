@@ -2082,12 +2082,11 @@ async function renderCommitLog(author) {
       .split(/\r?\n/)
       .filter(Boolean);
     const pageSize = 10;
-    let end = commits.length;
+    let offset = 0;
     let pageNumber = 1;
 
-    while (end > 0) {
-      const start = Math.max(0, end - pageSize);
-      const page = commits.slice(start, end).reverse();
+    while (offset < commits.length) {
+      const page = commits.slice(offset, offset + pageSize);
 
       console.log();
       console.log(chalk.blueBright(`📜 Git commit log (page ${pageNumber})`));
@@ -2102,8 +2101,8 @@ async function renderCommitLog(author) {
         console.log();
       });
 
-      end = start;
-      if (end === 0) return;
+      offset += pageSize;
+      if (offset >= commits.length) return;
 
       const nextPage = (await askQuestion("👉 Press Enter for 10 more logs (q to stop): "))
         .trim()
