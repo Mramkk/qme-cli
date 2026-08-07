@@ -1135,7 +1135,7 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
   }
 
   if (action === "log") {
-    showLastCommits();
+    await showLastCommits();
     return;
   }
 
@@ -1508,7 +1508,7 @@ async function runGitReset() {
   }
 
   if (action === "log") {
-    showLastCommits();
+    await showLastCommits();
     return;
   }
 
@@ -2013,15 +2013,70 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
 }
 
 /* ---------- COMMIT LOG ---------- */
-function showLastCommits() {
+async function showLastCommits() {
   try {
+    const authorResult = spawnSync("git", ["log", "--format=%an%x09%ae"], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (authorResult.error || authorResult.status !== 0) return;
+    const authorOutput = authorResult.stdout;
+    const authors = [];
+    const seenAuthors = new Set();
+
+    String(authorOutput)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .forEach((line) => {
+        const [name, email] = line.split("\t");
+        const key = `${name}\t${email}`.toLowerCase();
+        if (!seenAuthors.has(key)) {
+          seenAuthors.add(key);
+          authors.push({ name, email });
+        }
+      });
+
+    console.log();
+    console.log(chalk.blue("👤 Select log author:"));
+    console.log(chalk.green("  1) All authors"));
+    authors.forEach((author, index) => {
+      console.log(chalk.green(`  ${index + 2}) ${author.name} <${author.email}>`));
+    });
+    console.log(chalk.green("  q) Back"));
+
+    const answer = (await askQuestion("👉 Choose an author: ")).trim().toLowerCase();
+    if (!answer || answer === "q" || answer === "back") return;
+
+    const selectedIndex = Number.parseInt(answer, 10);
+    if (selectedIndex === 1) {
+      renderCommitLog();
+      return;
+    }
+
+    const selectedAuthor = authors[selectedIndex - 2];
+    if (!selectedAuthor) {
+      console.log(chalk.yellow("⚠️ Invalid author selection"));
+      return;
+    }
+
+    renderCommitLog(`${selectedAuthor.name} <${selectedAuthor.email}>`);
+  } catch {
+    return;
+  }
+}
+
+function renderCommitLog(author) {
+  try {
+    const args = [
+      "log",
+      "--date=format:%a %b %d %H:%M:%S %Y %z",
+      "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
+    ];
+    if (author) args.push(`--author=${author}`);
+
     const result = spawnSync(
       "git",
-      [
-        "log",
-        "--date=format:%a %b %d %H:%M:%S %Y %z",
-        "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
-      ],
+      args,
       { encoding: "utf8", windowsHide: true },
     );
 
