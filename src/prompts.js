@@ -203,6 +203,7 @@ function askAfterPullAction(currentBranch) {
                     return;
                 }
 
+                rl.close();
                 resolve("skip");
             }
         );
