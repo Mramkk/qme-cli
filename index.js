@@ -1395,6 +1395,8 @@ async function main() {
       clearXamppCurrentVersion,
       getProjectRepoUrl,
       setRemoteBranchForRepo,
+      askQuestion,
+      runUpdateFlow,
     });
     if (handled) return;
   }
