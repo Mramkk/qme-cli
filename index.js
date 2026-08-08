@@ -195,74 +195,18 @@ function printHelp(options = {}) {
   console.log(chalk.gray("Developer command-line toolkit"));
   console.log();
 
-  console.log(chalk.blueBright("Usage:"));
-  console.log(chalk.green("  qme <command> [subcommand] [options]"));
-  console.log();
-
-  console.log(chalk.blueBright("Common commands:"));
-  // console.log(chalk.green("  qme init [--branch <name>]"));
-  // console.log(chalk.green("  qme recent"));
   console.log(chalk.green("  qme git sync"));
-  console.log(chalk.gray("  Alias: qme gsync   (same as: qme git sync)"));
-  console.log(chalk.gray("  Alias: qme git -o   (same as: qme git open)"));
-  console.log(chalk.green("  qme pilot"));
-  console.log(chalk.gray("  Smart workspace inspector and startup helper"));
-  console.log(chalk.green("  qme git users [switch|add|remove]"));
-  console.log(chalk.green("  qme alias [list|add|remove]"));
-  console.log(chalk.green("  qme mysql"));
-  console.log(chalk.gray("  qme mysql permission   Updates XAMPP MySQL data-folder permissions"));
-  console.log(chalk.green("  qme ip"));
-  console.log(chalk.green("  qme flutter"));
-  console.log(chalk.gray("  App run, build, devices, clean, and common Flutter targets"));
-  console.log(chalk.green("  qme adb"));
-  console.log(chalk.gray("  Connect Android device to ADB over Wi-Fi using USB first"));
-  console.log(chalk.green("  qme dokr"));
-  console.log(chalk.gray("  Interactive Docker actions menu"));
-  console.log(chalk.gray("  Lists databases, then offers import, truncate, export, or shell"));
-  console.log(chalk.green("  qme config"));
-  console.log(chalk.gray("  Opens qme config file in VS Code"));
-  console.log(chalk.gray("  qme config auto-update [enable|disable|--show]"));
-  console.log(chalk.green("  qme update"));
-  console.log(chalk.gray("  Checks for and automatically installs CLI updates"));
-  console.log(chalk.green("  qme proj"));
-  console.log(chalk.gray("  Lists saved projects from qme config"));
-  console.log(chalk.green("  qme open <url>"));
-  console.log(chalk.green("  qme pem -f <path-to-pem>"));
-  console.log(chalk.green("  qme git ssh-key [--home <path>] [--host <hostname>] [--tag <name>]"));
-  // console.log(chalk.green("  qme config export [output-path]"));
-  // console.log(chalk.green("  qme config branch <branch-name>"));
-  // console.log(chalk.green("  qme xampp start|stop|switch <version>"));
-  console.log(chalk.green("  qme xini"));
-  console.log(chalk.gray("  Opens current XAMPP php.ini in VS Code"));
-  console.log(chalk.green("  qme xproj"));
-  console.log(chalk.gray("  Lists project folders from XAMPP htdocs"));
-  console.log(chalk.green("  qme sprint-review"));
-  console.log(chalk.gray("  Creates a Thunderbird sprint review mail draft"));
-  console.log(chalk.green("  qme sprint-plan"));
-  console.log(chalk.gray("  Creates a Thunderbird sprint plan mail draft"));
-  // console.log(chalk.green("  qme win <action|cmd...>  (alias: qme w)"));
-  // console.log(chalk.green("  qme timer <min> <label> [--popup|-p]"));
-  console.log();
-
-  console.log(chalk.blueBright("Git users:"));
+  console.log(chalk.gray("    Interactive Git workflow for pull, push, branches, and resets"));
   console.log(chalk.green("  qme git users"));
-  console.log(chalk.green("  qme git users add"));
-  console.log(chalk.green("  qme git users remove"));
-  console.log(chalk.gray("  Aliases: qme git user switch|add|remove, qme add git user"));
+  console.log(chalk.gray("    Switch, add, or remove saved Git user identities"));
+  console.log(chalk.green("  qme config"));
+  console.log(chalk.gray("    Open, export, or update QME configuration"));
   console.log();
 
   console.log(chalk.blueBright("Help:"));
   console.log(chalk.green("  qme help"));
   console.log(chalk.green("  qme --help   qme -h"));
   console.log(chalk.green("  qme --version   qme -v"));
-
-  try {
-    const { getConfigPath } = require("./src/config.js");
-    console.log();
-    console.log(chalk.gray(`Config: ${getConfigPath()}`));
-  } catch {
-    // ignore
-  }
 }
 
 function formatMonthName(date = new Date()) {
