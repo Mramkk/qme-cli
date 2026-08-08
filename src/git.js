@@ -1127,6 +1127,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "open-repo") {
+    runGitOpen();
+    return;
+  }
+
   if (action === "set-project-id") {
     await setGitLabProjectId(repoUrl);
     return;

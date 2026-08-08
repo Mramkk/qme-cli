@@ -52,22 +52,23 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
         if (allowPull) {
             console.log(chalk.green("  0) Pull"));
             console.log(chalk.green("  1) Push"));
-            console.log(chalk.green("  2) Change pull branch"));
-            console.log(chalk.green("  3) Checkout new branch"));
-            console.log(chalk.green("  4) Checkout branch"));
-            console.log(chalk.green("  5) Merge branch"));
-            console.log(chalk.green("  6) Reset hard"));
-            console.log(chalk.green("  7) Delete branch"));
-            console.log(chalk.green("  8) Log"));
-            let abortOption = 9;
+            console.log(chalk.green("  2) Open repo"));
+            console.log(chalk.green("  3) Change pull branch"));
+            console.log(chalk.green("  4) Checkout new branch"));
+            console.log(chalk.green("  5) Checkout branch"));
+            console.log(chalk.green("  6) Merge branch"));
+            console.log(chalk.green("  7) Reset hard"));
+            console.log(chalk.green("  8) Delete branch"));
+            console.log(chalk.green("  9) Log"));
+            let abortOption = 10;
             if (allowSetProjectId) {
-                console.log(chalk.green("  9) Set project id"));
-                abortOption = 10;
+                console.log(chalk.green("  10) Set project id"));
+                abortOption = 11;
             }
             console.log(chalk.green(`  ${abortOption}) Abort`));
             const optionHint = allowSetProjectId
-                ? "0/1/2/3/4/5/6/7/8/9"
-                : "0/1/2/3/4/5/6/7/8";
+                ? "0/1/2/3/4/5/6/7/8/9/10"
+                : "0/1/2/3/4/5/6/7/8/9";
             rl.question(
                 chalk.yellow(`👉 Choose an option (${optionHint}) [default: 0]: `),
                 answer => {
@@ -76,14 +77,15 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
 
                     if (!value || value === "0") resolve("pull");
                     else if (value === "1") resolve("push");
-                    else if (value === "2") resolve("change-pull-branch");
-                    else if (value === "3") resolve("checkout-new-branch");
-                    else if (value === "4") resolve("checkout");
-                    else if (value === "5") resolve("merge-branch");
-                    else if (value === "6") resolve("reset-hard-hash");
-                    else if (value === "7") resolve("delete-branch");
-                    else if (value === "8") resolve("log");
-                    else if (allowSetProjectId && value === "9") resolve("set-project-id");
+                    else if (value === "2") resolve("open-repo");
+                    else if (value === "3") resolve("change-pull-branch");
+                    else if (value === "4") resolve("checkout-new-branch");
+                    else if (value === "5") resolve("checkout");
+                    else if (value === "6") resolve("merge-branch");
+                    else if (value === "7") resolve("reset-hard-hash");
+                    else if (value === "8") resolve("delete-branch");
+                    else if (value === "9") resolve("log");
+                    else if (allowSetProjectId && value === "10") resolve("set-project-id");
                     else resolve("abort");
                 }
             );
