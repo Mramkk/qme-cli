@@ -2208,7 +2208,7 @@ async function runGitUserRemove() {
   console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
 }
 
-async function runGitUserSwitch() {
+async function runGitUserSwitch(generateSsh) {
   let savedUsers = getGitUsers();
   let selectedUser = null;
   const inRepo = isInsideGitRepo();
@@ -2227,12 +2227,13 @@ async function runGitUserSwitch() {
 	    console.log(chalk.blueBright("👥 Saved git users:"));
 	    console.log(chalk.yellow("  a) Add a new user"));
 	    console.log(chalk.yellow("  r) Remove a saved user"));
+	    console.log(chalk.yellow("  g) Generate SSH"));
 	    savedUsers.forEach((user, index) => {
 	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
 	    });
 
 	    const answerRaw = await askQuestion(
-	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, Enter = cancel): `),
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, Enter = cancel): `),
 	    );
 	    const answer = String(answerRaw || "").trim().toLowerCase();
 
@@ -2249,6 +2250,14 @@ async function runGitUserSwitch() {
 	      await runGitUserRemove();
 	      savedUsers = getGitUsers();
 	      continue;
+	    }
+	    if (answer === "g" || answer === "generate" || answer === "ssh") {
+	      if (typeof generateSsh === "function") {
+	        await generateSsh();
+
+      }
+
+      return;
 	    }
 
 	    const selectedIndex = Number.parseInt(answer, 10);
