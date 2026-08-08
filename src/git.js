@@ -1999,7 +1999,7 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
     openUrlInBrowser(mergeRequestUrl);
     console.log(chalk.green("✅ Opened merge request URL in browser"));
     console.log(chalk.cyan(mergeRequestUrl));
-    return true;
+    process.exit(0);
   } catch (error) {
     console.log(chalk.red("❌ Failed to open merge request URL in browser"));
     console.log(chalk.yellow(error.message));
