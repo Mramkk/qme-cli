@@ -24,6 +24,7 @@ function getConfiguredXamppDir() {
     return "";
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for legacy XAMPP launchers
 function buildXamppCommand(exeName) {
     const configuredDir = getConfiguredXamppDir();
     const configuredExe = configuredDir ? `${configuredDir}\\${exeName}` : "";
@@ -154,13 +155,18 @@ function getMailtoComposeFields(composeUrl) {
         cc: normalizeRecipients(parsed.searchParams.get("cc")),
         subject: parsed.searchParams.get("subject") || "",
         body: parsed.searchParams.get("body") || "",
+        format: parsed.searchParams.get("format") || "",
     };
 
     return fields;
 }
 
 function escapeThunderbirdComposeValue(value) {
-    return String(value || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/\r?\n/g, "\\n");
+    return String(value || "")
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\r?\n/g, "\\n");
 }
 
 function buildThunderbirdCommand(composeUrl) {
@@ -267,6 +273,7 @@ function isWindowsProcessRunning(imageName) {
     });
 }
 
+// eslint-disable-next-line no-unused-vars -- retained for legacy readiness checks
 async function waitForHttpUrl(url, timeoutMs = 60000, pollMs = 1500) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {

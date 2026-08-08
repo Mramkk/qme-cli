@@ -65,11 +65,14 @@ function getSprintMailRecipients() {
         }
     }
 
-    const sprintMail = config.system && config.system.sprintMail;
+    const sprintMail = (config.system && config.system.sprintMail) || config.sprintMail;
     const normalizeRecipients = (value, fallback) => {
-        const recipients = Array.isArray(value)
-            ? value.map((item) => String(item || "").trim()).filter(Boolean)
-            : [];
+        const values = Array.isArray(value)
+            ? value
+            : (typeof value === "string" ? value.split(/[;,]/) : []);
+        const recipients = values
+            .map((item) => String(item || "").trim())
+            .filter(Boolean);
         return recipients.length ? recipients : fallback;
     };
 
