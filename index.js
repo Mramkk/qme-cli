@@ -1451,12 +1451,13 @@ async function main() {
     return;
 
   if (
-    runDesktopCommand(args, {
+    await runDesktopCommand(args, {
       runGoogleChat,
       runHubstaff,
       runMail,
       runSprintReviewMail,
       runSprintPlanMail,
+      askQuestion,
       runNotepad,
       getDesktopNotesPath,
       appendNoteText,
