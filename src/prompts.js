@@ -61,7 +61,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
             console.log(chalk.green("  8) Log"));
             let abortOption = 9;
             if (allowSetProjectId) {
-                console.log(chalk.green("  9) Set GitLab project ID"));
+                console.log(chalk.green("  9) Set project id"));
                 abortOption = 10;
             }
             console.log(chalk.green(`  ${abortOption}) Abort`));
