@@ -13,54 +13,47 @@ Package: `@ramkumarbedia/xqme`
 npm i -g @ramkumarbedia/xqme
 ```
 
-```bash
-qme git ssh-key 
-```
-`qme git ssh-key `
-   Generates an Ed25519 SSH key using a saved Git user’s email as the key comment. The command first lets you select a saved user, add a new user, or remove a user. It then asks for the SSH host name and creates a matching profile in `~/.ssh/config`.
-
-   If the host already exists in `~/.ssh/config`, the existing profile is left unchanged. A new profile is created only when the host is not present.
-
-
-```bash
-qme git repo project id 123
-```
-`qme git repo project id <project-id>`
-    Stores Git repository project ID for the current repo in qme config.
-
-
+## Git sync
 
 ```bash
 qme git sync
 ```
-Runs an interactive Git synchronization workflow for the current repository. It verifies the repository, shows the current Git user and branches, detects local changes, and offers actions such as commit, stash, pull, branch checkout, branch creation, merge, hard reset, branch deletion, or abort.
 
-   After a commit or pull, it can push the current branch. After a successful push, it can optionally open a GitHub Pull Request or GitLab Merge Request URL. GitLab merge request links require a configured `project_id`. The configured pull branch is stored in qme config and defaults to `main`.
+Starts an interactive Git workflow for the current repository. It can help you:
 
-   **Warning:** Reset hard, branch deletion, and force push can discard or overwrite changes. Review the selected action before confirming.
+- Pull from the configured remote branch
+- Push the current branch normally or with force-with-lease
+- Change the pull branch
+- Checkout, create, merge, or delete branches
+- Reset local changes or return to an earlier commit
+- Commit or stash local changes before continuing
+
+The Push option pushes the current local branch without pulling first. Choose Abort to leave the workflow without making a change.
+
+## Git users
 
 ```bash
-qme git open
+qme git users
 ```
-`qme git open`
-   Opens current repository remote URL in browser at the current branch page.
-   Alias: `qme git -o`
+
+Use this command to:
+
+- Switch between saved Git accounts
+- Add a new Git user with a name and email
+- Remove a saved Git user
+- Enter a Git name and email manually when no saved user is selected
+- Update the global `git user.name` and `git user.email` values
+- Generate an SSH key
+
+## QME config
 
 ```bash
 qme config
 ```
-`qme config`
-   Opens the qme config file in VS Code. Creates it first if it does not exist.
 
+Use this command to:
 
-```bash
-qme config export
-```
-`qme config export`
-    Exports a qme config backup. Without an output path, the backup is written to the user’s `Downloads` folder.
-
-
-
-
-
+- Open the QME configuration file in VS Code
+- Export a backup of the QME configuration
+- Check for and install the latest QME update
 
