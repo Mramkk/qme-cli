@@ -4,7 +4,7 @@
   "description": "Cross-platform Node CLI",
   "main": "index.js",
   "bin": {
-    "qme": "./index.js"
+    "qme": "index.js"
   },
   "license": "MIT",
   "keywords": [
