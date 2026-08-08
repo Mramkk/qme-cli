@@ -79,8 +79,47 @@ async function runGitCommand(
   const userAction = args[1] === "users" ? args[2] || "switch" : args[1] === "user" ? args[2] : "";
 
   if (userAction === "switch" || userAction === "add" || userAction === "remove") {
-    const actions = { switch: runGitUserSwitch, add: runGitUserAdd, remove: runGitUserRemove };
-    await actions[userAction]();
+    if (userAction !== "switch") {
+      await { add: runGitUserAdd, remove: runGitUserRemove }[userAction]();
+      return true;
+    }
+
+    await runGitUserSwitch(async () => {
+      const selectedUser = await selectGitUserForSsh();
+      if (!selectedUser) {
+        console.log(chalk.gray("⏹️ SSH key setup cancelled"));
+        return;
+      }
+
+      const homeDir = getOptionValue(args, ["--home", "-H"]);
+      const hostName = getOptionValue(args, ["--host", "-h"]) ||
+        (await askQuestion(chalk.yellow("🌐 Enter SSH host name (for example: github.com): ")));
+      let fileTag = getOptionValue(args, ["--tag", "-f"]);
+
+      if (!hostName.trim()) {
+        console.log(chalk.red("❌ SSH host name cannot be empty"));
+        return;
+      }
+      if (!fileTag) fileTag = await askSshTag();
+
+      const generatedKey = generateGitSshKey({
+        homeDir,
+        comment: selectedUser.email,
+        fileTag,
+        keyType: "ed25519",
+      });
+      const sshConfigPath = updateSshConfig({
+        homeDir: generatedKey.homeDir,
+        hostName,
+        privateKeyPath: generatedKey.privateKeyPath,
+      });
+      console.log(
+        sshConfigPath.created
+          ? chalk.green("✅ SSH config profile created")
+          : chalk.yellow("ℹ️ SSH host already exists; config was not changed"),
+      );
+      console.log(chalk.blueBright("📄 SSH config:"), chalk.cyan(sshConfigPath.configPath));
+    });
     return true;
   }
 

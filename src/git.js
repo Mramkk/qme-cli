@@ -1010,6 +1010,13 @@ async function runGitRemove() {
 }
 
 async function runGitSync() {
+  while (true) {
+    const shouldExit = await runGitSyncOnce();
+    if (shouldExit) return;
+  }
+}
+
+async function runGitSyncOnce() {
   /* ---------- ENSURE GIT REPO ---------- */
   try {
     execSync("git rev-parse --is-inside-work-tree", { stdio: "ignore" });
@@ -1073,8 +1080,7 @@ async function runGitSync() {
 
     // With a clean working tree, always allow pull from the first menu.
   const action = await askFirstMenuAction(false, true, isGitLabRepo(repoUrl));
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
-  return;
+  return handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   }
 
   /* ==================================================
@@ -1085,7 +1091,7 @@ async function runGitSync() {
   console.log(chalk.cyan(changes));
 
   const action = await askFirstMenuAction(true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
+  return handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
 }
 
 /* ================= HELPERS ================= */
@@ -1098,13 +1104,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
 
   if (action === "stash") {
     await stashChanges(currentBranch);
-    await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
-    return;
+    return showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
   }
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
-    return;
+    return doPull(remoteBranch, currentBranch, repoUrl, projectId);
   }
 
   if (action === "push") {
@@ -1123,8 +1127,18 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
     return;
   }
 
+  if (action === "open-repo") {
+    runGitOpen();
+    return;
+  }
+
   if (action === "set-project-id") {
     await setGitLabProjectId(repoUrl);
+    return;
+  }
+
+  if (action === "log") {
+    await showLastCommits();
     return;
   }
 
@@ -1430,7 +1444,7 @@ async function mergeBranchFromMenu(currentBranch) {
     return;
   }
 
-  const result = spawnSync("git", ["merge", selected.name], {
+  const result = spawnSync("git", ["merge", "--no-edit", selected.name], {
     stdio: "inherit",
     shell: false,
   });
@@ -1492,7 +1506,7 @@ async function runGitReset() {
   }
 
   if (action === "log") {
-    showLastCommits();
+    await showLastCommits();
     return;
   }
 
@@ -1884,10 +1898,11 @@ async function showPullMenu(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askPostCommitAction(currentBranch, remoteBranch);
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
+    return doPull(remoteBranch, currentBranch, repoUrl, projectId);
   } else {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Pull skipped"));
   }
+  return false;
 }
 
 /* ---------- PULL → PUSH | SKIP ---------- */
@@ -1907,7 +1922,6 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askAfterPullAction(currentBranch);
   if (action === "skip") {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Push skipped"));
-    process.exit(0);
     return;
   }
 
@@ -1919,9 +1933,10 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
       pushCurrentBranch(currentBranch);
       console.log(chalk.green("✅ Push completed"));
     }
-    await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
+    return maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
     console.log(chalk.red(`❌ ${action === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
+    return false;
   }
 }
 
@@ -1938,13 +1953,13 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
   const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
   if (action !== "open") {
     // console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
-    return;
+    return false;
   }
 
   const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
   if (!repoBaseUrl) {
     console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
-    return;
+    return false;
   }
 
   let hostname = "";
@@ -1972,7 +1987,7 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
   } else {
     console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
     console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
-    return;
+    return false;
   }
 
   if (!mergeRequestUrl) {
@@ -1982,31 +1997,126 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
     } else {
       console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
     }
-    return;
+    return false;
   }
 
   try {
     openUrlInBrowser(mergeRequestUrl);
     console.log(chalk.green("✅ Opened merge request URL in browser"));
     console.log(chalk.cyan(mergeRequestUrl));
+    process.exit(0);
   } catch (error) {
     console.log(chalk.red("❌ Failed to open merge request URL in browser"));
     console.log(chalk.yellow(error.message));
     console.log(chalk.cyan(mergeRequestUrl));
+    return false;
   }
 }
 
-/* ---------- LAST COMMITS TABLE ---------- */
-function showLastCommits() {
+/* ---------- COMMIT LOG ---------- */
+async function showLastCommits() {
   try {
-    console.log();
-    // Reflog shows recent HEAD movements (commits, pulls, rebases, resets, checkouts).
-    execSync("git reflog", {
-      stdio: "inherit",
+    const authorResult = spawnSync("git", ["log", "--date-order", "--format=%an%x09%ae"], {
+      encoding: "utf8",
+      windowsHide: true,
     });
+    if (authorResult.error || authorResult.status !== 0) return;
+    const authorOutput = authorResult.stdout;
+    const authors = [];
+    const seenAuthors = new Set();
+
+    String(authorOutput)
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .forEach((line) => {
+        const [name, email] = line.split("\t");
+        const key = `${name}\t${email}`.toLowerCase();
+        if (!seenAuthors.has(key)) {
+          seenAuthors.add(key);
+          authors.push({ name, email });
+        }
+      });
+
+    console.log();
+    console.log(chalk.blue("👤 Select log author:"));
+    console.log(chalk.green("  1) All authors"));
+    authors.forEach((author, index) => {
+      console.log(chalk.green(`  ${index + 2}) ${author.name} <${author.email}>`));
+    });
+    console.log(chalk.green("  q) Back"));
+
+    const answer = (await askQuestion("👉 Choose an author: ")).trim().toLowerCase();
+    if (!answer || answer === "q" || answer === "back") return;
+
+    const selectedIndex = Number.parseInt(answer, 10);
+    if (selectedIndex === 1) {
+      await renderCommitLog();
+      return;
+    }
+
+    const selectedAuthor = authors[selectedIndex - 2];
+    if (!selectedAuthor) {
+      console.log(chalk.yellow("⚠️ Invalid author selection"));
+      return;
+    }
+
+    await renderCommitLog(`${selectedAuthor.name} <${selectedAuthor.email}>`);
   } catch {
-    console.log(chalk.red("❌ Could not read git reflog"));
+    return false;
   }
+}
+
+async function renderCommitLog(author) {
+  try {
+    const args = [
+      "log",
+      "--date-order",
+      "--date=format:%a %b %d %H:%M:%S %Y %z",
+      "--pretty=format:%H%x09%an%x09%ae%x09%ad%x09%s%x09%D",
+    ];
+    if (author) args.push(`--author=${author}`);
+
+    const result = spawnSync(
+      "git",
+      args,
+      { encoding: "utf8", windowsHide: true },
+    );
+
+    if (result.error || result.status !== 0) return;
+
+    const commits = String(result.stdout || "")
+      .split(/\r?\n/)
+      .filter(Boolean);
+    const pageSize = 10;
+    let offset = 0;
+    let pageNumber = 1;
+
+    while (offset < commits.length) {
+      const page = commits.slice(offset, offset + pageSize);
+
+      console.log();
+      console.log(chalk.blueBright(`📜 Git commit log (page ${pageNumber})`));
+      console.log(chalk.gray("─".repeat(56)));
+
+      page.forEach((line, index) => {
+        const [hash, commitAuthor, email, date, subject] = line.split("\t");
+
+        console.log(`${index + 1}) ${chalk.yellow(hash.slice(0, 8))}  ${subject}`);
+        console.log(`   👤 ${commitAuthor} <${email}>`);
+        console.log(`   📅 ${date}`);
+        console.log();
+      });
+
+      offset += pageSize;
+      if (offset >= commits.length) return;
+
+      const nextPage = (await askQuestion("👉 Press Enter for 10 more logs (q to stop): "))
+        .trim()
+        .toLowerCase();
+      if (nextPage === "q" || nextPage === "quit" || nextPage === "exit") return;
+      pageNumber += 1;
+    }
+  } catch {}
 }
 
 // stash 1
@@ -2098,7 +2208,7 @@ async function runGitUserRemove() {
   console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
 }
 
-async function runGitUserSwitch() {
+async function runGitUserSwitch(generateSsh) {
   let savedUsers = getGitUsers();
   let selectedUser = null;
   const inRepo = isInsideGitRepo();
@@ -2117,12 +2227,13 @@ async function runGitUserSwitch() {
 	    console.log(chalk.blueBright("👥 Saved git users:"));
 	    console.log(chalk.yellow("  a) Add a new user"));
 	    console.log(chalk.yellow("  r) Remove a saved user"));
+	    console.log(chalk.yellow("  g) Generate SSH"));
 	    savedUsers.forEach((user, index) => {
 	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
 	    });
 
 	    const answerRaw = await askQuestion(
-	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, Enter = cancel): `),
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, Enter = cancel): `),
 	    );
 	    const answer = String(answerRaw || "").trim().toLowerCase();
 
@@ -2139,6 +2250,14 @@ async function runGitUserSwitch() {
 	      await runGitUserRemove();
 	      savedUsers = getGitUsers();
 	      continue;
+	    }
+	    if (answer === "g" || answer === "generate" || answer === "ssh") {
+	      if (typeof generateSsh === "function") {
+	        await generateSsh();
+
+      }
+
+      return;
 	    }
 
 	    const selectedIndex = Number.parseInt(answer, 10);

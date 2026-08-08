@@ -1,4 +1,4 @@
-function runDesktopCommand(
+async function runDesktopCommand(
   args,
   {
     runGoogleChat,
@@ -6,6 +6,7 @@ function runDesktopCommand(
     runMail,
     runSprintReviewMail,
     runSprintPlanMail,
+    askQuestion,
     runNotepad,
     getDesktopNotesPath,
     appendNoteText,
@@ -23,6 +24,27 @@ function runDesktopCommand(
   if (command === "mail") {
     runMail();
     return true;
+  }
+  if (command === "sprint" && !args[1]) {
+    while (true) {
+      console.log();
+      console.log("Sprint menu");
+      console.log("  1) Sprint plan");
+      console.log("  2) Sprint review");
+      console.log("  q) Exit");
+
+      const choice = (await askQuestion("👉 Choose an option: ")).trim().toLowerCase();
+      if (!choice || choice === "q" || choice === "quit" || choice === "exit") return true;
+
+      if (choice === "1") {
+        runSprintPlanMail([]);
+        return true;
+      }
+      if (choice === "2") {
+        runSprintReviewMail([]);
+        return true;
+      }
+    }
   }
   if (command === "sprint-review") {
     runSprintReviewMail(args.slice(1));

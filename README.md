@@ -64,7 +64,16 @@ qme git ssh-key --host github.com --tag work
 ```
 
 9. `qme config`
-   Opens the qme config file in VS Code. Creates it first if it does not exist.
+   Opens an interactive config menu:
+
+```text
+  1) Open
+  2) Export
+  3) Update
+  q) Exit
+```
+
+   `Open` opens the qme config file in VS Code and creates it first if it does not exist. `Export` creates a config backup. `Update` manually checks for and installs the latest qme version.
 
 ```bash
 qme config

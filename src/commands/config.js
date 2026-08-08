@@ -17,6 +17,8 @@ async function runConfigCommand(
     clearXamppCurrentVersion,
     getProjectRepoUrl,
     setRemoteBranchForRepo,
+    askQuestion,
+    runUpdateFlow,
   },
 ) {
   if (args[0] !== "config") return false;
@@ -42,8 +44,31 @@ async function runConfigCommand(
   }
 
   if (!args[1]) {
-    tryOpenInVsCode(ensureConfigFile(), "qme config file");
-    return true;
+    while (true) {
+      console.log();
+      console.log("QME Config");
+      console.log("  1) Open");
+      console.log("  2) Export");
+      console.log("  3) Update");
+      console.log("  q) Exit");
+
+      const choice = (await askQuestion("👉 Choose an option: ")).trim().toLowerCase();
+      if (!choice || choice === "q" || choice === "quit" || choice === "exit") {
+        return true;
+      }
+
+      if (choice === "1") {
+        tryOpenInVsCode(ensureConfigFile(), "qme config file");
+        continue;
+      }
+      if (choice === "2") {
+        exportConfig(null);
+        continue;
+      }
+      if (choice === "3") {
+        await runUpdateFlow({ force: true });
+      }
+    }
   }
 
   if (args[1] === "export") {
