@@ -1011,7 +1011,8 @@ async function runGitRemove() {
 
 async function runGitSync() {
   while (true) {
-    await runGitSyncOnce();
+    const shouldExit = await runGitSyncOnce();
+    if (shouldExit) return;
   }
 }
 
@@ -1079,8 +1080,7 @@ async function runGitSyncOnce() {
 
     // With a clean working tree, always allow pull from the first menu.
   const action = await askFirstMenuAction(false, true, isGitLabRepo(repoUrl));
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
-  return;
+  return handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, false);
   }
 
   /* ==================================================
@@ -1091,7 +1091,7 @@ async function runGitSyncOnce() {
   console.log(chalk.cyan(changes));
 
   const action = await askFirstMenuAction(true);
-  await handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
+  return handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, repoConfig.project_id, true);
 }
 
 /* ================= HELPERS ================= */
@@ -1104,13 +1104,11 @@ async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUr
 
   if (action === "stash") {
     await stashChanges(currentBranch);
-    await showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
-    return;
+    return showPullMenu(remoteBranch, currentBranch, repoUrl, projectId);
   }
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
-    return;
+    return doPull(remoteBranch, currentBranch, repoUrl, projectId);
   }
 
   if (action === "push") {
@@ -1895,11 +1893,11 @@ async function showPullMenu(remoteBranch, currentBranch, repoUrl, projectId) {
   const action = await askPostCommitAction(currentBranch, remoteBranch);
 
   if (action === "pull") {
-    await doPull(remoteBranch, currentBranch, repoUrl, projectId);
+    return doPull(remoteBranch, currentBranch, repoUrl, projectId);
   } else {
     console.log(chalk.gray("⏭️".padEnd(4, " ") + "Pull skipped"));
   }
-
+  return false;
 }
 
 /* ---------- PULL → PUSH | SKIP ---------- */
@@ -1930,9 +1928,10 @@ async function doPull(remoteBranch, currentBranch, repoUrl, projectId) {
       pushCurrentBranch(currentBranch);
       console.log(chalk.green("✅ Push completed"));
     }
-    await maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
+    return maybeOpenMergeRequestUrl(repoUrl, currentBranch, remoteBranch, projectId);
   } catch (error) {
     console.log(chalk.red(`❌ ${action === "force-push" ? "Force push" : "Push"} failed: ${formatGitError(error)}`));
+    return false;
   }
 }
 
@@ -1949,13 +1948,13 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
   const action = await askAfterPushMergeRequestAction(sourceBranch, targetBranch);
   if (action !== "open") {
     // console.log(chalk.gray("⏭️".padEnd(4, " ") + "Merge request URL skipped"));
-    return;
+    return false;
   }
 
   const repoBaseUrl = normalizeRepoToHttpUrl(repoUrl);
   if (!repoBaseUrl) {
     console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
-    return;
+    return false;
   }
 
   let hostname = "";
@@ -1983,7 +1982,7 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
   } else {
     console.log(chalk.yellow("⚠️ Could not build merge request URL for this repository."));
     console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
-    return;
+    return false;
   }
 
   if (!mergeRequestUrl) {
@@ -1993,17 +1992,19 @@ async function maybeOpenMergeRequestUrl(repoUrl, sourceBranch, targetBranch, pro
     } else {
       console.log(chalk.yellow("This flow currently supports GitLab and GitHub remotes."));
     }
-    return;
+    return false;
   }
 
   try {
     openUrlInBrowser(mergeRequestUrl);
     console.log(chalk.green("✅ Opened merge request URL in browser"));
     console.log(chalk.cyan(mergeRequestUrl));
+    return true;
   } catch (error) {
     console.log(chalk.red("❌ Failed to open merge request URL in browser"));
     console.log(chalk.yellow(error.message));
     console.log(chalk.cyan(mergeRequestUrl));
+    return false;
   }
 }
 
@@ -2056,7 +2057,7 @@ async function showLastCommits() {
 
     await renderCommitLog(`${selectedAuthor.name} <${selectedAuthor.email}>`);
   } catch {
-    return;
+    return false;
   }
 }
 
