@@ -1,6 +1,6 @@
 {
   "name": "@ramkumarbedia/xqme",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "description": "Cross-platform Node CLI",
   "main": "index.js",
   "bin": {
@@ -24,9 +24,7 @@
     "lint": "eslint index.js src test",
     "format": "prettier --write src/commands src/services src/errors.js test",
     "format:check": "prettier --check src/commands src/services src/errors.js test"
-    
   },
-  
   "dependencies": {
     "chalk": "^4.1.2"
   },
