@@ -1,6 +1,6 @@
 {
   "name": "@ramkumarbedia/xqme",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "Cross-platform Node CLI",
   "main": "index.js",
   "bin": {
