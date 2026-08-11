@@ -1010,7 +1010,14 @@ async function runGitRemove() {
 }
 
 async function runGitSync() {
+  let firstMenu = true;
+
   while (true) {
+    if (!firstMenu) {
+      console.log(chalk.gray("==============================================="));
+    }
+    firstMenu = false;
+
     const shouldExit = await runGitSyncOnce();
     if (shouldExit) return;
   }
