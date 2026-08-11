@@ -2237,7 +2237,7 @@ async function runGitUserSwitch(generateSsh) {
 	    });
 
 	    const answerRaw = await askQuestion(
-	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, u = global user, Enter = cancel): `),
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, u = configure global user, Enter = abort): `),
 	    );
 	    const answer = String(answerRaw || "").trim().toLowerCase();
 
