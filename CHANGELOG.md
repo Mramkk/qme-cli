@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added a consistent git user menu when no saved users exist.
+
+## 4.0.3
+
+- Added a consistent git user menu when no saved users exist.
+
+## 4.0.2
+
 - Organized command routing into dedicated command modules.
 - Added shared process, project, PHP, network, validation, and XAMPP services.
 - Added centralized error handling, verbose/quiet output modes, plugins, and shell completion.

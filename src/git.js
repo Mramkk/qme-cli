@@ -2222,24 +2222,31 @@ async function runGitUserSwitch(generateSsh) {
 	    String(process.env.QME_GH_LOGOUT || "").trim(),
 	  );
 
-	  while (savedUsers.length > 0) {
+	  while (true) {
 	    console.log();
 	    console.log(chalk.blueBright("👥 Saved git users:"));
 	    console.log(chalk.yellow("  a) Add a new user"));
 	    console.log(chalk.yellow("  r) Remove a saved user"));
 	    console.log(chalk.yellow("  g) Generate SSH"));
+	    console.log(chalk.yellow("  u) Configure global Git user"));
+	    if (savedUsers.length === 0) {
+	      console.log(chalk.gray("  No saved users found"));
+	    }
 	    savedUsers.forEach((user, index) => {
 	      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
 	    });
 
 	    const answerRaw = await askQuestion(
-	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, Enter = cancel): `),
+	      chalk.yellow(`👉 Choose user (1-${savedUsers.length}) (a = add, r = remove, g = generate SSH, u = global user, Enter = cancel): `),
 	    );
 	    const answer = String(answerRaw || "").trim().toLowerCase();
 
 	    if (!answer) {
 	      console.log(chalk.yellow("ℹ️ Cancelled."));
 	      return;
+	    }
+	    if (answer === "u" || answer === "global") {
+	      break;
 	    }
 	    if (answer === "a" || answer === "add") {
 	      await runGitUserAdd();
