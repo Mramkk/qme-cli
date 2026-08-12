@@ -396,12 +396,13 @@ function getXamppCurrentVersion() {
 function normalizeGitUserEntry(entry) {
     const name = String(entry?.name || "").trim();
     const email = String(entry?.email || "").trim();
+    const provider = String(entry?.provider || "").trim().toLowerCase();
 
     if (!name || !email) {
         return null;
     }
 
-    return { name, email };
+    return provider ? { name, email, provider } : { name, email };
 }
 
 function getGitUsers() {
