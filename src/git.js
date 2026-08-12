@@ -1040,7 +1040,7 @@ async function runGitSync() {
 
   while (true) {
     if (!firstMenu) {
-      console.log(chalk.gray("==============================================="));
+      console.log(chalk.gray("===============Back to Main Menu==============="));
     }
     firstMenu = false;
 
