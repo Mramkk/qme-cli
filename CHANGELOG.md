@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+## 4.0.5
+
 - Added a consistent git user menu when no saved users exist.
+- Updated the SSH key tag prompt wording.
+- Fixed the git users menu divider so it appears only when returning from a submenu.
 
 ## 4.0.3
 
