@@ -79,7 +79,8 @@ async function runUpdateFlow({ force = false } = {}) {
             console.log();
 
             console.log(chalk.cyan("🚀 Installing the latest version globally..."));
-            const result = runSync("npm", ["install", "-g", "@ramkumarbedia/xqme"], {
+            const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+            const result = runSync(npmCommand, ["install", "-g", "@ramkumarbedia/xqme"], {
                 stdio: "inherit"
             });
 
