@@ -92,7 +92,8 @@ async function runGitCommand(
       }
 
       const homeDir = getOptionValue(args, ["--home", "-H"]);
-      const hostName = getOptionValue(args, ["--host", "-h"]) ||
+      const hostName =
+        getOptionValue(args, ["--host", "-h"]) ||
         (await askQuestion(chalk.yellow("🌐 Enter SSH host name (for example: github.com): ")));
       let fileTag = getOptionValue(args, ["--tag", "-f"]);
 

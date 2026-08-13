@@ -1,12 +1,18 @@
 {
   "name": "@ramkumarbedia/xqme",
   "version": "4.0.3",
-  "description": "Cross-platform Node CLI",
+  "description": "Cross-platform developer command-line toolkit",
   "main": "index.js",
   "bin": {
     "qme": "index.js"
   },
+  "engines": {
+    "node": ">=18"
+  },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "cli",
     "node",
@@ -15,11 +21,13 @@
   ],
   "files": [
     "index.js",
-    "src"
+    "src",
+    "completions"
   ],
   "scripts": {
     "test": "node --test",
     "check": "npm test && npm run lint && npm run format:check",
+    "prepublishOnly": "npm run check",
     "version:check": "node scripts/check-version.js",
     "lint": "eslint index.js src test",
     "format": "prettier --write src/commands src/services src/errors.js test",

@@ -520,31 +520,6 @@ function isCommandAvailable(command) {
   }
 }
 
-function runGitHostSshTest(label, host) {
-  if (!isCommandAvailable("ssh")) {
-    console.log(chalk.red("❌ ssh command not found"));
-    return;
-  }
-
-  console.log(chalk.blueBright(`🔐 Testing ${label} SSH connection...`));
-  const result = spawnSync("ssh", ["-T", `git@${host}`], {
-    encoding: "utf8",
-    shell: false,
-  });
-  const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
-  const success = result.status === 0 || /successfully authenticated|welcome to/i.test(output);
-
-  if (success) {
-    console.log(chalk.green(`✅ ${label} SSH test passed`));
-  } else {
-    console.log(chalk.red(`❌ ${label} SSH test failed`));
-  }
-
-  if (output) {
-    console.log(chalk.gray(output));
-  }
-}
-
 function isSshRemote(remoteUrl) {
   const raw = String(remoteUrl || "").trim();
   return /^git@/i.test(raw) || /^ssh:\/\//i.test(raw);
