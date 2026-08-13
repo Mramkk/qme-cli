@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.0.6
+
+- Fixed global updates on Windows by invoking the `npm.cmd` executable.
+
 ## 4.0.5
 
 - Added a consistent git user menu when no saved users exist.
