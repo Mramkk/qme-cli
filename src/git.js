@@ -2237,8 +2237,14 @@ async function runGitUserSwitch(generateSsh) {
 	    String(process.env.QME_GH_LOGOUT || "").trim(),
 	  );
 
+  let firstMenu = true;
+
   while (true) {
-    console.log(chalk.gray("===============Back to Main Menu==============="));
+    if (!firstMenu) {
+      console.log(chalk.gray("===============Back to Main Menu==============="));
+    }
+    firstMenu = false;
+
     console.log(chalk.blueBright("👥 Saved git users:"));
     console.log(chalk.yellow("  1) Users"));
     console.log(chalk.yellow("  2) Add a new user"));

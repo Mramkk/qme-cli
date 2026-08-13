@@ -402,7 +402,7 @@ async function askSshEmail(defaultEmail = "") {
 
 async function askSshTag() {
     const value = await askQuestion(
-        chalk.magenta("🏷️ Enter key tag for id_rsa_<tag>: ")
+        chalk.magenta("🏷️ Enter key tag <tag>: ")
     );
 
     if (value) {
