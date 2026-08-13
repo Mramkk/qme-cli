@@ -2305,6 +2305,15 @@ async function runGitUserSwitch(generateSsh) {
     }
 
     if (answer === "5" || answer === "change") {
+      const currentGlobal = getGitUser("--global") || { name: "", email: "" };
+      if (currentGlobal.name || currentGlobal.email) {
+        console.log(
+          chalk.blueBright("👤 Current global user:"),
+          chalk.green(`${currentGlobal.name || "(not set)"} <${currentGlobal.email || "(not set)"}>`),
+        );
+      } else {
+        console.log(chalk.yellow("ℹ️ No global git user is set yet."));
+      }
       selectedUser = await selectSavedGitUser("👥 Choose a saved git user:", false);
       if (selectedUser) {
         console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
@@ -2702,7 +2711,7 @@ async function selectSavedGitUser(title = "👥 Saved git users:", allowManageme
 }
 
 async function selectGitUserForSsh() {
-  return selectSavedGitUser("👥 Select Git user for SSH key:");
+  return selectSavedGitUser("👥 Select Git user for SSH key:", false);
 }
 module.exports = {
   runGitSync,
