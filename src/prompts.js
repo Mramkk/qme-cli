@@ -37,7 +37,7 @@ function askGitBranchMenu() {
         console.log(chalk.green("  4) Delete branch"));
 
         rl.question(
-            chalk.yellow("👉 Choose an option (0/1/2/3/4) [Enter = abort]: "),
+            chalk.yellow("👉 Choose an option (0/1/2/3/4) [Enter = back]: "),
             answer => {
                 rl.close();
                 const value = answer.trim();
@@ -48,7 +48,7 @@ function askGitBranchMenu() {
                     3: "merge-branch",
                     4: "delete-branch",
                 };
-                resolve(actions[value] || "abort");
+                resolve(actions[value] || "main-menu");
             },
         );
     });
@@ -64,13 +64,13 @@ function askGitHistoryMenu() {
         console.log(chalk.green("  1) Reset hard"));
 
         rl.question(
-            chalk.yellow("👉 Choose an option (0/1) [Enter = abort]: "),
+            chalk.yellow("👉 Choose an option (0/1) [Enter = back]: "),
             answer => {
                 rl.close();
                 const value = answer.trim();
                 if (value === "0") resolve("log");
                 else if (value === "1") resolve("reset-hard-hash");
-                else resolve("abort");
+                else resolve("main-menu");
             },
         );
     });
