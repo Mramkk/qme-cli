@@ -2252,9 +2252,10 @@ async function runGitUserSwitch(generateSsh) {
     console.log(chalk.yellow("  4) Generate SSH"));
     console.log(chalk.yellow("  5) Change global git user"));
     console.log(chalk.yellow("  6) Configure global Git user"));
+    console.log(chalk.yellow("  7) Clear terminal"));
 
     const answer = String(
-      await askQuestion(chalk.yellow("👉 Choose an option (1-6, Enter = abort): ")),
+      await askQuestion(chalk.yellow("👉 Choose an option (1-7, Enter = abort): ")),
     ).trim().toLowerCase();
 
     if (!answer) {
@@ -2305,6 +2306,11 @@ async function runGitUserSwitch(generateSsh) {
 
     if (answer === "6" || answer === "global" || answer === "configure") {
       break;
+    }
+
+    if (answer === "7" || answer === "clear") {
+      console.clear();
+      continue;
     }
 
     console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
