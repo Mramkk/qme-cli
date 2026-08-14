@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 4.0.7
+
+- Added clear-terminal actions to the Git user, Git sync, and config menus.
+- Invalid config menu input now exits instead of reopening the menu.
+
 ## 4.0.6
 
 - Fixed global updates on Windows by invoking the `npm.cmd` executable.
