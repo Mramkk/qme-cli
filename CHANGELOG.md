@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 4.0.8
+
+- Improved saved Git user management with provider-aware matching and display.
+- Simplified the config menu and made Open/Export exit after completing.
+
 ## 4.0.7
 
 - Added clear-terminal actions to the Git user, Git sync, and config menus.
