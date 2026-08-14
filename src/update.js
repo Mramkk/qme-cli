@@ -1,5 +1,7 @@
 const https = require("https");
 const chalk = require("chalk");
+const fs = require("fs");
+const path = require("path");
 const { runSync } = require("./process");
 const {
     getLastUpdateCheckTime,
@@ -62,6 +64,19 @@ function isNewerVersion(current, latest) {
     return false;
 }
 
+function getNpmCommand() {
+    if (process.platform !== "win32") return "npm";
+
+    // npm.cmd is normally installed beside node.exe. This also works when
+    // qme was launched from a shell whose PATH does not include npm.
+    const nodeDirectory = path.dirname(process.execPath);
+    const npmInNodeDirectory = path.join(nodeDirectory, "npm.cmd");
+    if (fs.existsSync(npmInNodeDirectory)) return npmInNodeDirectory;
+
+    // Keep the normal PATH lookup as a fallback for custom Node installs.
+    return "npm.cmd";
+}
+
 async function runUpdateFlow({ force = false } = {}) {
     if (force) {
         console.log(chalk.cyan("🔍 Checking for updates..."));
@@ -79,12 +94,13 @@ async function runUpdateFlow({ force = false } = {}) {
             console.log();
 
             console.log(chalk.cyan("🚀 Installing the latest version globally..."));
-            const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+            const npmCommand = getNpmCommand();
             const result = runSync(npmCommand, ["install", "-g", "@ramkumarbedia/xqme"], {
-                stdio: "inherit"
+                stdio: "inherit",
+                allowFailure: true
             });
 
-            if (result.status === 0) {
+            if (!result.error && result.status === 0) {
                 console.log(chalk.green("✅ Successfully updated to the latest version!"));
             } else {
                 console.log(chalk.red("❌ Failed to update. Please try running manually: npm i -g @ramkumarbedia/xqme"));
