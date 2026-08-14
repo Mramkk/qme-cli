@@ -45,10 +45,9 @@ async function runConfigCommand(
   if (!args[1]) {
     while (true) {
       console.log();
-      console.log("QME Config");
+      console.log("Config");
       console.log("  1) Open");
       console.log("  2) Export");
-      console.log("  3) Clear terminal");
 
       const choice = (await askQuestion("👉 Choose an option: ")).trim().toLowerCase();
       if (!choice || choice === "q" || choice === "quit" || choice === "exit") {
@@ -57,17 +56,12 @@ async function runConfigCommand(
 
       if (choice === "1") {
         tryOpenInVsCode(ensureConfigFile(), "qme config file");
-        continue;
+        return true;
       }
       if (choice === "2") {
         exportConfig(null);
-        continue;
+        return true;
       }
-      if (choice === "3") {
-        console.clear();
-        continue;
-      }
-
       return true;
     }
   }
