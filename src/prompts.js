@@ -60,15 +60,15 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
             console.log(chalk.green("  7) Reset hard"));
             console.log(chalk.green("  8) Delete branch"));
             console.log(chalk.green("  9) Log"));
-            let abortOption = 10;
+            let clearOption = 10;
             if (allowSetProjectId) {
                 console.log(chalk.green("  10) Set project id"));
-                abortOption = 11;
+                clearOption = 11;
             }
-            console.log(chalk.green(`  ${abortOption}) Abort`));
+            console.log(chalk.green(`  ${clearOption}) Clear terminal`));
             const optionHint = allowSetProjectId
-                ? "0/1/2/3/4/5/6/7/8/9/10"
-                : "0/1/2/3/4/5/6/7/8/9";
+                ? "0/1/2/3/4/5/6/7/8/9/10/11"
+                : "0/1/2/3/4/5/6/7/8/9/10";
             rl.question(
                 chalk.yellow(`👉 Choose an option (${optionHint}) [default: 0]: `),
                 answer => {
@@ -86,6 +86,7 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
                     else if (value === "8") resolve("delete-branch");
                     else if (value === "9") resolve("log");
                     else if (allowSetProjectId && value === "10") resolve("set-project-id");
+                    else if (value === String(clearOption)) resolve("clear-terminal");
                     else resolve("abort");
                 }
             );

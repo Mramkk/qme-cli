@@ -1105,6 +1105,11 @@ async function runGitSyncOnce() {
 /* ================= HELPERS ================= */
 
 async function handleFirstMenuAction(action, remoteBranch, currentBranch, repoUrl, projectId, hasLocalChanges) {
+  if (action === "clear-terminal") {
+    console.clear();
+    return;
+  }
+
   if (action === "abort") {
     console.log(chalk.gray("⏹️".padEnd(4, " ") + "Aborted"));
     process.exit(0);
