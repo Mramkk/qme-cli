@@ -24,6 +24,58 @@ function askCommitMessage() {
 }
 
 /* ---------------- FIRST MENU ---------------- */
+function askGitBranchMenu() {
+    return new Promise(resolve => {
+        const rl = createRL();
+
+        console.log();
+        console.log(chalk.blue("🔀 Branch management:"));
+        console.log(chalk.green("  0) Change pull branch"));
+        console.log(chalk.green("  1) Checkout new branch"));
+        console.log(chalk.green("  2) Checkout branch"));
+        console.log(chalk.green("  3) Merge branch"));
+        console.log(chalk.green("  4) Delete branch"));
+
+        rl.question(
+            chalk.yellow("👉 Choose an option (0/1/2/3/4) [Enter = abort]: "),
+            answer => {
+                rl.close();
+                const value = answer.trim();
+                const actions = {
+                    0: "change-pull-branch",
+                    1: "checkout-new-branch",
+                    2: "checkout",
+                    3: "merge-branch",
+                    4: "delete-branch",
+                };
+                resolve(actions[value] || "abort");
+            },
+        );
+    });
+}
+
+function askGitHistoryMenu() {
+    return new Promise(resolve => {
+        const rl = createRL();
+
+        console.log();
+        console.log(chalk.blue("🧾 History and reset:"));
+        console.log(chalk.green("  0) Log"));
+        console.log(chalk.green("  1) Reset hard"));
+
+        rl.question(
+            chalk.yellow("👉 Choose an option (0/1) [Enter = abort]: "),
+            answer => {
+                rl.close();
+                const value = answer.trim();
+                if (value === "0") resolve("log");
+                else if (value === "1") resolve("reset-hard-hash");
+                else resolve("abort");
+            },
+        );
+    });
+}
+
 function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProjectId = false) {
     return new Promise(resolve => {
         const rl = createRL();
@@ -53,22 +105,17 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
             console.log(chalk.green("  0) Pull"));
             console.log(chalk.green("  1) Push"));
             console.log(chalk.green("  2) Open repo"));
-            console.log(chalk.green("  3) Change pull branch"));
-            console.log(chalk.green("  4) Checkout new branch"));
-            console.log(chalk.green("  5) Checkout branch"));
-            console.log(chalk.green("  6) Merge branch"));
-            console.log(chalk.green("  7) Reset hard"));
-            console.log(chalk.green("  8) Delete branch"));
-            console.log(chalk.green("  9) Log"));
-            let clearOption = 10;
+            console.log(chalk.green("  3) Branch management"));
+            console.log(chalk.green("  4) History and reset"));
+            let clearOption = 5;
             if (allowSetProjectId) {
-                console.log(chalk.green("  10) Set project id"));
-                clearOption = 11;
+                console.log(chalk.green("  5) Set project id"));
+                clearOption = 6;
             }
             console.log(chalk.green(`  ${clearOption}) Clear terminal`));
             const optionHint = allowSetProjectId
-                ? "0/1/2/3/4/5/6/7/8/9/10/11"
-                : "0/1/2/3/4/5/6/7/8/9/10";
+                ? "0/1/2/3/4/5/6"
+                : "0/1/2/3/4/5";
             rl.question(
                 chalk.yellow(`👉 Choose an option (${optionHint}) [default: 0]: `),
                 answer => {
@@ -78,14 +125,9 @@ function askFirstMenuAction(allowCommit = true, allowPull = false, allowSetProje
                     if (!value || value === "0") resolve("pull");
                     else if (value === "1") resolve("push");
                     else if (value === "2") resolve("open-repo");
-                    else if (value === "3") resolve("change-pull-branch");
-                    else if (value === "4") resolve("checkout-new-branch");
-                    else if (value === "5") resolve("checkout");
-                    else if (value === "6") resolve("merge-branch");
-                    else if (value === "7") resolve("reset-hard-hash");
-                    else if (value === "8") resolve("delete-branch");
-                    else if (value === "9") resolve("log");
-                    else if (allowSetProjectId && value === "10") resolve("set-project-id");
+                    else if (value === "3") askGitBranchMenu().then(resolve);
+                    else if (value === "4") askGitHistoryMenu().then(resolve);
+                    else if (allowSetProjectId && value === "5") resolve("set-project-id");
                     else if (value === String(clearOption)) resolve("clear-terminal");
                     else resolve("abort");
                 }
