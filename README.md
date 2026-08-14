@@ -55,5 +55,4 @@ Use this command to:
 
 - Open the QME configuration file in VS Code
 - Export a backup of the QME configuration
-- Check for and install the latest QME update
 

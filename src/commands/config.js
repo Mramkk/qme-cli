@@ -18,7 +18,6 @@ async function runConfigCommand(
     getProjectRepoUrl,
     setRemoteBranchForRepo,
     askQuestion,
-    runUpdateFlow,
   },
 ) {
   if (args[0] !== "config") return false;
@@ -49,8 +48,7 @@ async function runConfigCommand(
       console.log("QME Config");
       console.log("  1) Open");
       console.log("  2) Export");
-      console.log("  3) Update");
-      console.log("  4) Clear terminal");
+      console.log("  3) Clear terminal");
 
       const choice = (await askQuestion("👉 Choose an option: ")).trim().toLowerCase();
       if (!choice || choice === "q" || choice === "quit" || choice === "exit") {
@@ -66,10 +64,6 @@ async function runConfigCommand(
         continue;
       }
       if (choice === "3") {
-        await runUpdateFlow({ force: true });
-        continue;
-      }
-      if (choice === "4") {
         console.clear();
         continue;
       }

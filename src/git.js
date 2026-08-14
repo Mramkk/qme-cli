@@ -26,6 +26,11 @@ const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, 
 
 const REMOTE = "origin";
 
+function formatSavedGitUser(user) {
+  const provider = String(user?.provider || "").trim();
+  return `${user.name} <${user.email}>${provider ? ` (${provider})` : ""}`;
+}
+
 function isGitLabRepo(repoUrl) {
   const value = String(repoUrl || "").trim().toLowerCase();
   return value.includes("gitlab.") || value.includes("gitlab.com") || value.startsWith("git@gitlab:");
@@ -2146,9 +2151,22 @@ async function runGitUserAdd() {
     process.exit(1);
   }
 
-  const existing = getGitUsers();
+  const provider =
+    providerAnswer === "1" || providerAnswer === "gitlab"
+      ? "gitlab"
+      : providerAnswer === "2" || providerAnswer === "github"
+        ? "github"
+        : "";
+
+  const nameKey = String(name).trim().toLowerCase();
   const emailKey = String(email).trim().toLowerCase();
-  const already = existing.find(u => String(u.email).trim().toLowerCase() === emailKey);
+  const providerKey = provider.toLowerCase();
+  const existing = getGitUsers();
+  const already = existing.find(u =>
+    String(u.name).trim().toLowerCase() === nameKey &&
+    String(u.email).trim().toLowerCase() === emailKey &&
+    String(u.provider || "").trim().toLowerCase() === providerKey,
+  );
 
   if (already) {
     const shouldUpdate = await askYesNo(
@@ -2161,12 +2179,6 @@ async function runGitUserAdd() {
     }
   }
 
-  const provider =
-    providerAnswer === "1" || providerAnswer === "gitlab"
-      ? "gitlab"
-      : providerAnswer === "2" || providerAnswer === "github"
-        ? "github"
-        : "";
   const ok = addOrUpdateGitUser({ name, email, provider });
   if (!ok) {
     console.log(chalk.red("❌ Failed to save git user"));
@@ -2189,11 +2201,11 @@ async function runGitUserRemove() {
   console.log();
   console.log(chalk.blueBright("👥 Saved git users:"));
   savedUsers.forEach((user, index) => {
-    console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+    console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
   });
 
   const answer = await askQuestion(
-    chalk.yellow(`🗑️ Choose user to remove (0-${savedUsers.length}) [default: abort]: `),
+    chalk.yellow(`Choose user to remove (1-${savedUsers.length}) [default: abort]: `),
   );
   const selectedIndex = answer ? Number.parseInt(answer, 10) : 0;
 
@@ -2209,7 +2221,7 @@ async function runGitUserRemove() {
 
   const selectedUser = savedUsers[selectedIndex - 1];
   const confirmed = await askYesNo(
-    chalk.yellow(`🗑️ Remove ${selectedUser.name} <${selectedUser.email}> from saved users?`),
+    chalk.yellow(`Remove ${formatSavedGitUser(selectedUser)} from saved users?`),
     false,
   );
 
@@ -2225,7 +2237,7 @@ async function runGitUserRemove() {
   }
 
   console.log(chalk.green("✅ Removed saved git user"));
-  console.log(chalk.blueBright("👤"), chalk.green(`${selectedUser.name} <${selectedUser.email}>`));
+  console.log(chalk.blueBright("👤"), chalk.green(formatSavedGitUser(selectedUser)));
   console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
 }
 
@@ -2303,7 +2315,7 @@ async function runGitUserSwitch(generateSsh) {
       }
       selectedUser = await selectSavedGitUser("👥 Choose a saved git user:", false);
       if (selectedUser) {
-        console.log(chalk.green(`✅ Selected: ${selectedUser.name} <${selectedUser.email}>`));
+        console.log(chalk.green(`✅ Selected: ${formatSavedGitUser(selectedUser)}`));
         break;
       }
       continue;
@@ -2648,7 +2660,7 @@ function showSavedGitUsers(title = "👥 Saved git users:") {
     return;
   }
   savedUsers.forEach((user, index) => {
-    console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+    console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
   });
 }
 
@@ -2666,7 +2678,7 @@ async function selectSavedGitUser(title = "👥 Saved git users:", allowManageme
       console.log(chalk.gray("  No saved users found"));
     }
     savedUsers.forEach((user, index) => {
-      console.log(chalk.green(`  ${index + 1}) ${user.name} <${user.email}>`));
+      console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
     });
 
     const answer = String(

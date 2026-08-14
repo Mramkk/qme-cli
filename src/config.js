@@ -428,9 +428,15 @@ function addOrUpdateGitUser(user) {
     }
 
     const users = Array.isArray(config.system.gitUsers) ? config.system.gitUsers : [];
+    const nameKey = normalized.name.toLowerCase();
     const emailKey = normalized.email.toLowerCase();
+    const providerKey = String(normalized.provider || "").toLowerCase();
 
-    const index = users.findIndex(item => String(item?.email || "").trim().toLowerCase() === emailKey);
+    const index = users.findIndex(item =>
+        String(item?.name || "").trim().toLowerCase() === nameKey &&
+        String(item?.email || "").trim().toLowerCase() === emailKey &&
+        String(item?.provider || "").trim().toLowerCase() === providerKey
+    );
     if (index >= 0) {
         users[index] = normalized;
     } else {
