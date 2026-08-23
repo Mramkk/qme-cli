@@ -1,4 +1,5 @@
 /node_modules
+/.env
 /qme-linux
 /qme-macos
 /qme-win.exe
