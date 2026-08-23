@@ -28,9 +28,16 @@ function createVsCodeService({ spawnSync, chalk }) {
 
   function parseFileUriToPath(value) {
     if (!value || typeof value !== "string") return "";
-    if (!value.startsWith("file://")) return path.resolve(value);
+    const input = value.trim();
+    const unquotedInput =
+      ((input.startsWith('"') && input.endsWith('"')) ||
+        (input.startsWith("'") && input.endsWith("'"))) &&
+      input.length >= 2
+        ? input.slice(1, -1)
+        : input;
+    if (!unquotedInput.startsWith("file://")) return path.resolve(unquotedInput);
     try {
-      const parsed = new URL(value);
+      const parsed = new URL(unquotedInput);
       if (parsed.protocol !== "file:") return "";
       let parsedPath = decodeURIComponent(parsed.pathname || "");
       if (process.platform === "win32") {

@@ -7,10 +7,12 @@ const { isExecutableAvailable } = require("../src/services/validation");
 const { getPhpVersion } = require("../src/services/php");
 const { configureOutput } = require("../src/output");
 const { loadPluginCommands } = require("../src/plugins");
+const { createVsCodeService } = require("../src/services/vscode");
 const {
   getAvailableXamppVersions,
   getXamppSwitchVersionCandidate,
 } = require("../src/services/xampp");
+const { createMysqlHelpers, createMysqlOperations } = require("../src/services/mysql");
 
 test("process runner executes Node without shell concatenation", () => {
   const result = runSync(process.execPath, ["-e", "process.stdout.write('ok')"]);
@@ -63,4 +65,26 @@ test("XAMPP version helpers normalize folders and sort switch targets", () => {
 
   assert.equal(getXamppSwitchVersionCandidate("xampp-8.1.12"), "8.1");
   assert.deepEqual(getAvailableXamppVersions("C:\\xampp", "8.1", fakeFs), ["7.4"]);
+});
+
+test("MySQL operations parse database output through their helper factory", () => {
+  const helpers = createMysqlHelpers(() => []);
+  helpers.runMysqlCapture = () => ({ status: 0, stdout: "app_db\r\nmysql\r\n" });
+  const operations = createMysqlOperations(helpers, {
+    askQuestion: async () => "",
+    parseFileUriPath: (value) => value,
+  });
+
+  assert.deepEqual(operations.getMysqlDatabases("mysql"), ["app_db"]);
+});
+
+test("file path parser accepts quoted paths", () => {
+  const { parseFileUriToPath } = createVsCodeService({
+    spawnSync: () => ({}),
+    chalk: {},
+  });
+  const inputPath = path.join(process.cwd(), "streamly.sql");
+
+  assert.equal(parseFileUriToPath(`"${inputPath}"`), inputPath);
+  assert.equal(parseFileUriToPath(`'${inputPath}'`), inputPath);
 });

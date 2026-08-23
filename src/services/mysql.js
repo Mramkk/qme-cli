@@ -58,6 +58,9 @@ function createMysqlHelpers(getXamppPathCandidates) {
       resolveMysqlBinExecutable(getMysqlExecutableCandidates(), "MySQL client"),
     resolveMysqldumpExecutable: () =>
       resolveMysqlBinExecutable(getMysqldumpExecutableCandidates(), "mysqldump"),
+    quoteMysqlIdentifier,
+    isProtectedDatabase,
+    parseMysqlLines,
   };
 }
 
