@@ -129,6 +129,7 @@ const { runLifecycleCommand } = require("./src/commands/lifecycle");
 const { runNavigationCommand } = require("./src/commands/navigation");
 const { runArtisanCommand } = require("./src/commands/artisan");
 const { dispatchCommand } = require("./src/commands/registry");
+const { isCommandEnabled } = require("./src/commands/definitions");
 const { runPilotCommand } = require("./src/commands/pilot");
 const { runProjectListCommand } = require("./src/commands/project-list");
 const { runDokrCommand } = require("./src/commands/dokr");
@@ -1009,6 +1010,12 @@ async function main() {
   if (args[0] === "--version" || args[0] === "-v") {
     const version = getCliVersion();
     console.log(version || "");
+    return;
+  }
+
+  if (!isCommandEnabled(args[0])) {
+    console.log(chalk.yellow(`The qme ${args[0]} command is not found !`));
+    process.exitCode = 1;
     return;
   }
 
