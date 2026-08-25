@@ -10,6 +10,7 @@ async function runXamppCommand(
     askQuestion,
     getXamppPath,
     setXamppPath,
+    onMysqlReady,
   },
 ) {
   const command = args[0];
@@ -66,6 +67,7 @@ async function runXamppCommand(
           askQuestion,
           getXamppPath,
           setXamppPath,
+          onMysqlReady,
         });
       }
     }
@@ -80,7 +82,7 @@ async function runXamppCommand(
     return true;
   }
   if (command === "xstart" || (command === "xampp" && args[1] === "start")) {
-    runXamppStartByPlatform();
+    runXamppStartByPlatform({ onMysqlReady });
     return true;
   }
   if (command === "xstop" || (command === "xampp" && args[1] === "stop")) {

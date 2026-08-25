@@ -1429,6 +1429,7 @@ async function main() {
       askQuestion,
       getXamppPath,
       setXamppPath,
+      onMysqlReady: () => runMysqlPermission(getXamppPath),
     })
   )
     return;

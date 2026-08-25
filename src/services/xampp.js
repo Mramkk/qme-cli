@@ -107,14 +107,14 @@ function createXamppPlatformOperations({
   runWindowsXamppStop,
   chalk,
 }) {
-  function runXamppStartByPlatform() {
+  function runXamppStartByPlatform(options = {}) {
     if (process.platform === "darwin") {
       runMacXamppStart();
       return;
     }
 
     if (process.platform === "win32") {
-      runWindowsXamppStart();
+      runWindowsXamppStart(options);
       return;
     }
 
