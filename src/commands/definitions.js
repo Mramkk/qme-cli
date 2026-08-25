@@ -1,9 +1,7 @@
 const crypto = require("crypto");
-const fs = require("fs");
 const os = require("os");
-const path = require("path");
 
-const ENV_FILE_PATHS = [path.join(process.cwd(), ".env"), path.join(__dirname, "..", "..", ".env")];
+const SYSTEM_KEY = "91e57cece8c867f6909b3f23ae02bc86de64373905e8471057581d547bde1476";
 
 /**
  * Command-level feature switches.
@@ -61,28 +59,8 @@ const commandDefinitions = {
   xampp: { enabled: false },
 };
 
-function getEnvValue(name) {
-  if (process.env[name]) {
-    return String(process.env[name]).trim();
-  }
-
-  const envFilePath = ENV_FILE_PATHS.find((filePath) => fs.existsSync(filePath));
-  if (!envFilePath) {
-    return "";
-  }
-
-  const line = fs
-    .readFileSync(envFilePath, "utf8")
-    .split(/\r?\n/)
-    .find((entry) => entry.trim().startsWith(`${name}=`));
-  if (!line) {
-    return "";
-  }
-
-  return line
-    .slice(line.indexOf("=") + 1)
-    .trim()
-    .replace(/^(["'])(.*)\1$/, "$2");
+function getCommandDefinition(commandName) {
+  return commandDefinitions[commandName] || null;
 }
 
 function getCurrentSystemKey() {
@@ -91,27 +69,12 @@ function getCurrentSystemKey() {
 }
 
 function isAuthorizedSystem() {
-  const allowedSystemKey = getEnvValue("QME_SYSTEM_KEY");
-  return Boolean(allowedSystemKey) && allowedSystemKey === getCurrentSystemKey();
-}
-
-function getCommandDefinition(commandName) {
-  return commandDefinitions[commandName] || null;
+  return Boolean(SYSTEM_KEY) && SYSTEM_KEY === getCurrentSystemKey();
 }
 
 function isCommandEnabled(commandName) {
   const definition = getCommandDefinition(commandName);
-  if (!definition) {
-    return true;
-  }
-
-  // The authorized machine can use every defined command, even if disabled.
-  if (isAuthorizedSystem()) {
-    return true;
-  }
-
-  // Every other machine can use only explicitly enabled commands.
-  return definition.enabled !== false;
+  return Boolean(definition && (isAuthorizedSystem() || definition.enabled !== false));
 }
 
 module.exports = {

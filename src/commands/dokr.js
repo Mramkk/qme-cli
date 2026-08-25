@@ -1,6 +1,7 @@
 const chalk = require("chalk");
 const fs = require("fs");
 const path = require("path");
+const { withSpinner } = require("../loading");
 
 const DOCKER_ACTIONS = ["Containers", "Images", "Volumes", "Compose", "View logs", "Open shell"];
 const COMPOSE_ACTIONS = ["Up", "Up -d", "Up --build", "Up --build -d", "Down"];
@@ -65,13 +66,16 @@ async function ensureDockerReady(spawnSync, spawnProcess = spawnSync) {
   });
   dockerDesktopProcess?.unref?.();
 
-  console.log(chalk.gray("⏳ Waiting for Docker Engine..."));
-  for (let attempt = 0; attempt < 45; attempt += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    if (isDockerReady(spawnSync)) {
-      console.log(chalk.green("✅ Docker Engine is ready"));
-      return true;
+  const ready = await withSpinner("Waiting for Docker Engine", async () => {
+    for (let attempt = 0; attempt < 45; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      if (isDockerReady(spawnSync)) return true;
     }
+    return false;
+  });
+  if (ready) {
+    console.log(chalk.green("✅ Docker Engine is ready"));
+    return true;
   }
 
   console.log(chalk.red("❌ Docker Engine did not become ready in time."));
