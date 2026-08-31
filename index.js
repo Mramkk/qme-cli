@@ -80,7 +80,12 @@ const {
 } = require("./src/services/xampp");
 const { getXamppPathCandidates, resolveXamppHtdocsPath, resolveXamppPhpIniPath } =
   createXamppPathResolver({ getXamppPath, chalk });
-const { parseFileUriToPath, resolveLastVsCodeProjectPath, tryOpenInVsCode } = createVsCodeService({
+const {
+  parseFileUriToPath,
+  resolveLastVsCodeProjectPath,
+  getOpenVsCodePaths,
+  tryOpenInVsCode,
+} = createVsCodeService({
   spawnSync,
   chalk,
 });
@@ -1430,6 +1435,22 @@ async function main() {
       getXamppPath,
       setXamppPath,
       onMysqlReady: () => runMysqlPermission(getXamppPath),
+      onBeforeStop: () => {
+        const roots = getXamppPathCandidates().map((root) => `${root.toLowerCase()}\\`);
+        const paths = getOpenVsCodePaths().filter((targetPath) => {
+          const normalized = targetPath.toLowerCase();
+          return roots.some((root) => normalized.startsWith(root));
+        });
+
+        console.log(chalk.blueBright("VS Code XAMPP paths:"));
+        if (paths.length === 0) {
+          console.log(chalk.gray("  None found"));
+          return;
+        }
+        paths.forEach((targetPath, index) => {
+          console.log(chalk.green(`  ${index + 1}. ${targetPath}`));
+        });
+      },
     })
   )
     return;

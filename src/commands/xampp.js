@@ -11,6 +11,7 @@ async function runXamppCommand(
     getXamppPath,
     setXamppPath,
     onMysqlReady,
+    onBeforeStop,
   },
 ) {
   const command = args[0];
@@ -68,13 +69,16 @@ async function runXamppCommand(
           getXamppPath,
           setXamppPath,
           onMysqlReady,
+          onBeforeStop,
         });
       }
     }
   }
 
   if (command === "xini") {
-    tryOpenInVsCode(resolveXamppPhpIniPath(), "XAMPP php.ini");
+    const phpIniPath = resolveXamppPhpIniPath();
+    console.log(`VS Code path: ${phpIniPath}`);
+    tryOpenInVsCode(phpIniPath, "XAMPP php.ini");
     return true;
   }
   if (command === "xproj") {
@@ -86,7 +90,10 @@ async function runXamppCommand(
     return true;
   }
   if (command === "xstop" || (command === "xampp" && args[1] === "stop")) {
-    await runXamppStopByPlatform();
+    await runXamppStopByPlatform({
+      onBeforeStop,
+      killCodeFirst: command === "xstop",
+    });
     return true;
   }
   if (command === "xswitch" || (command === "xampp" && args[1] === "switch")) {

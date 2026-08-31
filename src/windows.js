@@ -275,6 +275,74 @@ function isWindowsProcessRunning(imageName) {
   });
 }
 
+async function isAnyWindowsProcessRunning(imageNames) {
+  for (const imageName of imageNames) {
+    if (await isWindowsProcessRunning(imageName)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+async function forceStopWindowsProcess(imageName, attempts = 3) {
+  let foundProcess = false;
+  let lastResult = null;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    foundProcess = (await isWindowsProcessRunning(imageName)) || foundProcess;
+    // /IM matches every instance of this image name, while /T also closes
+    // any child processes owned by it.
+    lastResult = await execAsync(`taskkill /F /T /IM ${imageName}`, { windowsHide: false });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+
+  return {
+    foundProcess,
+    stopped: foundProcess && !(await isWindowsProcessRunning(imageName)),
+    result: lastResult,
+  };
+}
+
+async function stopWindowsService(serviceName) {
+  const query = await execAsync(`sc.exe query ${serviceName}`, { windowsHide: true });
+  const queryOutput = `${query.stdout || ""}\n${query.stderr || ""}`;
+
+  // Do not print noise for service names that are not registered. XAMPP can
+  // run perfectly well without installing Apache/MySQL as Windows services.
+  if (query.error || /1060|does not exist|failed 1060/i.test(queryOutput)) {
+    return { exists: false, stopped: true };
+  }
+
+  const result = await execAsync(`sc.exe stop ${serviceName}`, { windowsHide: false });
+  const output = `${result.stdout || ""}\n${result.stderr || ""}`.toLowerCase();
+
+  // 1060 = service does not exist, and 1062 = service is not running. Both
+  // are expected for installations that do not register XAMPP services.
+  if (result.error && !/1060|1062|does not exist|not been started|not running/i.test(output)) {
+    console.log(chalk.yellow(`⚠️ Could not stop Windows service ${serviceName}`));
+    console.log(chalk.gray(String(result.stderr || result.error.message).trim()));
+  }
+
+  return {
+    exists: true,
+    stopped: !result.error || /1062|not been started|not running/i.test(output),
+  };
+}
+
+async function forceStopXamppProcessesElevated() {
+  // Apache/MySQL are often started by an elevated XAMPP control panel. A
+  // normal taskkill from qme then returns Access Denied. Use one UAC prompt for
+  // both processes instead of silently leaving them running.
+  const command =
+    "Get-Process -Name httpd,apache,mysqld,mariadbd -ErrorAction SilentlyContinue | Stop-Process -Force";
+  const encodedCommand = Buffer.from(command, "utf16le").toString("base64");
+  return execAsync(
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile','-EncodedCommand','${encodedCommand}'"`,
+    { windowsHide: false },
+  );
+}
+
 // eslint-disable-next-line no-unused-vars -- retained for legacy readiness checks
 async function waitForHttpUrl(url, timeoutMs = 60000, pollMs = 1500) {
   const start = Date.now();
@@ -675,55 +743,132 @@ function execAsync(commandLine, options = {}) {
 }
 
 async function runXamppStop(options = {}) {
-  const { strict = false, killDevProcesses = false } = options;
+  const { strict = false, killDevProcesses = false, killCodeFirst = false, onBeforeStop } = options;
 
   if (process.platform !== "win32") {
     console.log(chalk.red("❌ This command is only available on Windows"));
     process.exit(1);
   }
 
+  let codeClosed = false;
+  if (killCodeFirst) {
+    // Do not use /T here: qme may be running inside VS Code's terminal, and
+    // killing the process tree would terminate qme before XAMPP is stopped.
+    const codeStopResult = await execAsync("taskkill /F /IM code.exe", { windowsHide: false });
+    codeClosed = !codeStopResult.error;
+  }
+
   const apacheRunningBefore = await isWindowsProcessRunning("httpd.exe");
   const mysqlRunningBefore = await isWindowsProcessRunning("mysqld.exe");
+  if (!killCodeFirst && typeof onBeforeStop === "function") {
+    onBeforeStop();
+  }
+  if (!killCodeFirst) {
+    console.log(chalk.blueBright("Services before stop:"));
+    console.log(chalk.gray(`1. Apache ${apacheRunningBefore ? "running" : "not running"}`));
+    console.log(chalk.gray(`2. MySQL ${mysqlRunningBefore ? "running" : "not running"}`));
+  }
+
   const commandLine = resolveXamppExecutable("xampp_stop.exe");
   if (!commandLine) {
-    console.log(chalk.yellow("⚠️ XAMPP stop executable not found."));
-    console.log(chalk.yellow("If XAMPP is already stopped, there is nothing to do."));
-    console.log(chalk.yellow("Otherwise set the XAMPP path with `qme config xampp-path <path>`."));
-    return;
-  }
-
-  const stopResult = await execAsync(commandLine, { windowsHide: false });
-
-  if (stopResult.error) {
-    if (!apacheRunningBefore && !mysqlRunningBefore) {
-      console.log(chalk.green("✅ XAMPP is already stopped"));
-    } else {
-      console.log(chalk.yellow("⚠️ XAMPP stop command failed."));
-      console.log(chalk.yellow(stopResult.error.message));
+    if (!killCodeFirst) {
+      console.log(chalk.yellow("⚠️ XAMPP stop executable not found."));
+      console.log(chalk.yellow("If XAMPP is already stopped, there is nothing to do."));
+      console.log(chalk.yellow("Otherwise set the XAMPP path with `qme config xampp-path <path>`."));
+      return;
     }
-  } else {
-    console.log(chalk.green("✅ Stop XAMPP"));
   }
 
-  const cleanupImages = ["httpd.exe", "mysqld.exe", "php.exe", "xampp-control.exe"];
+  const stopResult = commandLine
+    ? await execAsync(commandLine, { windowsHide: false })
+    : { error: null };
+
+  if (!killCodeFirst) {
+    if (stopResult.error) {
+      if (!apacheRunningBefore && !mysqlRunningBefore) {
+        console.log(chalk.green("✅ XAMPP is already stopped"));
+      } else {
+        console.log(chalk.yellow("⚠️ XAMPP stop command failed."));
+        console.log(chalk.yellow(stopResult.error.message));
+      }
+    } else {
+      console.log(chalk.green("✅ Stop XAMPP"));
+    }
+  }
+
+  // Stop the two XAMPP services separately and retry. XAMPP's stop executable
+  // can fail while the actual child processes are still alive.
+  const coreStopResults = [];
+  // Apache/MySQL are commonly installed as Windows services by XAMPP. Stop
+  // those registrations first so the Service Control Manager cannot restart
+  // the processes immediately after taskkill succeeds.
+  for (const serviceName of ["Apache2.4", "mysql", "MySQL", "MariaDB"]) {
+    coreStopResults.push(await stopWindowsService(serviceName));
+  }
+  for (const imageName of ["xampp-control.exe", "httpd.exe", "apache.exe", "mysqld.exe", "mariadbd.exe"]) {
+    coreStopResults.push(await forceStopWindowsProcess(imageName));
+  }
+
+  let apacheAfterTaskkill = await isAnyWindowsProcessRunning(["httpd.exe", "apache.exe"]);
+  let mysqlAfterTaskkill = await isAnyWindowsProcessRunning(["mysqld.exe", "mariadbd.exe"]);
+  if (apacheAfterTaskkill || mysqlAfterTaskkill) {
+    const elevatedResult = await forceStopXamppProcessesElevated();
+    if (elevatedResult.error) {
+      console.log(chalk.yellow("⚠️ Could not stop elevated XAMPP processes."));
+      console.log(chalk.gray("Run qme from an Administrator terminal and try `qme xstop` again."));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    apacheAfterTaskkill = await isAnyWindowsProcessRunning(["httpd.exe", "apache.exe"]);
+    mysqlAfterTaskkill = await isAnyWindowsProcessRunning(["mysqld.exe", "mariadbd.exe"]);
+  }
+
+  const cleanupImages = ["php.exe"];
   if (killDevProcesses) {
     cleanupImages.push("git.exe", "node.exe", "code.exe");
   }
-  const cleanupCommand = `cmd /c taskkill /F /T ${cleanupImages.map((name) => `/IM ${name}`).join(" ")}`;
-  const cleanupResult = await execAsync(cleanupCommand, { windowsHide: false });
+  const cleanupResults = await Promise.all(
+    cleanupImages.map((imageName) =>
+      execAsync(`taskkill /F /T /IM ${imageName}`, { windowsHide: false }),
+    ),
+  );
+  const cleanupSucceeded =
+    coreStopResults.some((result) => result && (result.foundProcess || result.stopped)) ||
+    cleanupResults.some((result) => !result.error);
 
-  if (cleanupResult.error) {
-    console.log(
-      chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."),
-    );
-  } else {
-    console.log(chalk.green("✅ Forced cleanup for XAMPP processes"));
+  if (!killCodeFirst) {
+    if (!cleanupSucceeded) {
+      console.log(
+        chalk.yellow("⚠️ XAMPP stopped, but one or more cleanup process kills were skipped."),
+      );
+    } else {
+      console.log(chalk.green("✅ Forced cleanup for XAMPP processes"));
+    }
   }
 
   await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  const apacheRunning = await isWindowsProcessRunning("httpd.exe");
-  const mysqlRunning = await isWindowsProcessRunning("mysqld.exe");
+  const apacheRunning = await isAnyWindowsProcessRunning(["httpd.exe", "apache.exe"]);
+  const mysqlRunning = await isAnyWindowsProcessRunning(["mysqld.exe", "mariadbd.exe"]);
+
+  if (killCodeFirst) {
+    console.log(chalk.green(`1. VS Code ${codeClosed ? "closed" : "already closed"}`));
+    console.log(chalk.green(`2. Apache ${apacheRunning ? "still running" : "stopped"}`));
+    console.log(chalk.green(`3. MySQL ${mysqlRunning ? "still running" : "stopped"}`));
+  } else {
+    console.log(chalk.blueBright("Services after stop:"));
+    const stoppedServices = [
+      !apacheRunning && "Apache stopped",
+      !mysqlRunning && "MySQL stopped",
+    ].filter(Boolean);
+
+    if (stoppedServices.length === 0) {
+      console.log(chalk.yellow("None"));
+    } else {
+      stoppedServices.forEach((service, index) => {
+        console.log(chalk.green(`${index + 1}. ${service}`));
+      });
+    }
+  }
 
   if (strict && (apacheRunning || mysqlRunning)) {
     console.log(chalk.red("❌ XAMPP services still appear to be running"));

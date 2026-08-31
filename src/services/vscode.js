@@ -88,6 +88,34 @@ function createVsCodeService({ spawnSync, chalk }) {
     return resolvedPath;
   }
 
+  function getOpenVsCodePaths() {
+    const storagePath = getVsCodeStoragePath();
+    if (!storagePath || !fs.existsSync(storagePath)) return [];
+
+    try {
+      const storageData = JSON.parse(fs.readFileSync(storagePath, "utf8"));
+      const windows = storageData?.windowsState?.openedWindows || [];
+      const lastWindow = storageData?.windowsState?.lastActiveWindow;
+      const entries = [...windows, lastWindow].filter(Boolean);
+      return [...new Set(
+        entries
+          .map(
+            (entry) =>
+              entry.folder ||
+              entry.folderUri ||
+              entry.workspace ||
+              entry.workspaceUri ||
+              entry.filePath ||
+              "",
+          )
+          .map(parseFileUriToPath)
+          .filter(Boolean),
+      )];
+    } catch {
+      return [];
+    }
+  }
+
   function tryOpenInVsCode(targetPath, label = "recent project", options = {}) {
     const codeArgs = [options.newWindow ? "-n" : "-r", targetPath];
     const codeResult =
@@ -157,6 +185,7 @@ function createVsCodeService({ spawnSync, chalk }) {
     getVsCodeStoragePath,
     parseFileUriToPath,
     resolveLastVsCodeProjectPath,
+    getOpenVsCodePaths,
     tryOpenInVsCode,
   };
 }
