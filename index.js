@@ -14,6 +14,7 @@ const {
   runGitUserAdd,
   runGitUserRemove,
   selectGitUserForSsh,
+  testGitUserConnection,
 } = require("./src/git.js");
 const { generateGitSshKey, updateSshConfig } = require("./src/ssh.js");
 const { askQuestion, askSshTag } = require("./src/prompts.js");
@@ -37,6 +38,7 @@ const {
   getUpdateCheckSetting,
   setUpdateCheckSetting,
   getSprintMailRecipients,
+  addOrUpdateGitUser,
 } = require("./src/config.js");
 const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
@@ -1313,11 +1315,13 @@ async function main() {
       runGitUserSwitch,
       runGitUserAdd,
       runGitUserRemove,
+      addOrUpdateGitUser,
       selectGitUserForSsh,
       askQuestion,
       askSshTag,
       generateGitSshKey,
       updateSshConfig,
+      testGitUserConnection,
       getOptionValue,
       getProjectRepoUrl,
       setProjectIdForRepo,

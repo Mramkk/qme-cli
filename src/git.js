@@ -2241,7 +2241,83 @@ async function runGitUserRemove() {
   console.log(chalk.blueBright("📄 Config:"), chalk.cyan(getConfigPath()));
 }
 
-async function runGitUserSwitch(generateSsh) {
+async function testGitUserConnection(user, askHost = askQuestion) {
+  const provider = String(user?.provider || "").trim().toLowerCase();
+  const defaultHost =
+    provider === "github" ? "github.com" : provider === "gitlab" ? "gitlab.com" : "";
+  const hostInput = defaultHost || (await askHost(chalk.yellow("🌐 Enter SSH host name: ")));
+  const host = String(hostInput || "").trim();
+
+  if (!host) {
+    console.log(chalk.yellow("ℹ️ Connection test cancelled"));
+    return;
+  }
+
+  const sshArgs = [
+    "-T",
+    "-o",
+    "BatchMode=yes",
+    "-o",
+    "ConnectTimeout=10",
+    "-o",
+    "StrictHostKeyChecking=accept-new",
+  ];
+  if (user?.identityFile) {
+    const identityFile = String(user.identityFile).replace(/^~(?=$|[\\/])/, os.homedir());
+    sshArgs.push("-i", identityFile);
+  }
+  sshArgs.push(`git@${host}`);
+
+  console.log(chalk.cyan(`🔌 Testing SSH connection for ${user.name} <${user.email}>...`));
+  const knownHostCheck = spawnSync("ssh-keygen", ["-F", host], {
+    encoding: "utf8",
+    windowsHide: true,
+  });
+  const hostIsKnown = knownHostCheck.status === 0 && Boolean(String(knownHostCheck.stdout || "").trim());
+
+  if (!hostIsKnown) {
+    const confirmHost = String(
+      await askHost(
+        chalk.yellow(
+          `The authenticity of host '${host}' cannot be established. Continue connecting? (Y/n): `,
+        ),
+      ),
+    )
+      .trim()
+      .toLowerCase();
+    if (confirmHost && !["y", "yes"].includes(confirmHost)) {
+      console.log(chalk.yellow("ℹ️ Connection test cancelled"));
+      return;
+    }
+
+    sshArgs[sshArgs.indexOf("StrictHostKeyChecking=accept-new")] = "StrictHostKeyChecking=no";
+  }
+
+  const result = spawnSync("ssh", sshArgs, {
+    encoding: "utf8",
+    timeout: 15000,
+    windowsHide: true,
+  });
+  const output = `${result.stdout || ""}${result.stderr || ""}`.trim();
+
+  if (output) {
+    console.log(output);
+  }
+  if (result.error) {
+    console.log(chalk.red(`❌ SSH connection test failed: ${result.error.message}`));
+    return;
+  }
+
+  // GitHub/GitLab commonly return exit code 1 after successful authentication because
+  // interactive shell access is disabled; the SSH response is the useful result.
+  if (result.status === 0 || /successfully authenticated|shell access|welcome/i.test(output)) {
+    console.log(chalk.green("✅ SSH connection test completed"));
+  } else {
+    console.log(chalk.red(`❌ SSH connection test failed (exit code ${result.status})`));
+  }
+}
+
+async function runGitUserSwitch(generateSsh, testConnection) {
   let selectedUser = null;
   const inRepo = isInsideGitRepo();
   const debugCreds = /^(1|true|yes)$/i.test(
@@ -2265,14 +2341,10 @@ async function runGitUserSwitch(generateSsh) {
     console.log(chalk.blueBright("👥 Saved git users:"));
     console.log(chalk.yellow("  1) Users"));
     console.log(chalk.yellow("  2) Add a new user"));
-    console.log(chalk.yellow("  3) Remove a saved user"));
-    console.log(chalk.yellow("  4) Generate SSH"));
-    console.log(chalk.yellow("  5) Change global git user"));
-    console.log(chalk.yellow("  6) Configure global Git user"));
-    console.log(chalk.yellow("  7) Clear terminal"));
+    console.log(chalk.yellow("  3) Clear terminal"));
 
     const answer = String(
-      await askQuestion(chalk.yellow("👉 Choose an option (1-7, Enter = abort): ")),
+      await askQuestion(chalk.yellow("👉 Choose an option (1-3, Enter = abort): ")),
     ).trim().toLowerCase();
 
     if (!answer) {
@@ -2281,8 +2353,71 @@ async function runGitUserSwitch(generateSsh) {
     }
 
     if (answer === "1" || answer === "users") {
-      showSavedGitUsers();
-      await askQuestion(chalk.gray("👉 Press Enter to go back: "));
+      const savedUser = await selectSavedGitUser("👥 Select a saved git user:", false);
+      if (!savedUser) {
+        continue;
+      }
+
+      while (true) {
+        console.log();
+        console.log(chalk.blueBright(`👤 Selected: ${formatSavedGitUser(savedUser)}`));
+        console.log(chalk.yellow("  1) Generate SSH"));
+        console.log(chalk.yellow("  2) Test Connection"));
+        console.log(chalk.yellow("  3) Make global user"));
+        console.log(chalk.yellow("  4) Remove User"));
+
+        const userAction = String(
+          await askQuestion(chalk.yellow("👉 Choose an option (1-4): ")),
+        )
+          .trim()
+          .toLowerCase();
+
+        if (!userAction) {
+          break;
+        }
+
+        if (userAction === "1" || userAction === "ssh" || userAction === "generate") {
+          if (typeof generateSsh === "function") {
+            await generateSsh(savedUser);
+          }
+          break;
+        }
+
+        if (userAction === "2" || userAction === "test" || userAction === "connection") {
+          if (typeof testConnection === "function") {
+            await testConnection(savedUser);
+          }
+          break;
+        }
+
+        if (userAction === "3" || userAction === "global") {
+          selectedUser = savedUser;
+          break;
+        }
+
+        if (userAction === "4" || userAction === "remove" || userAction === "rm") {
+          const confirmed = await askYesNo(
+            chalk.yellow(`Remove ${formatSavedGitUser(savedUser)} from saved users?`),
+            false,
+          );
+          if (!confirmed) {
+            console.log(chalk.yellow("⚠️ Skipped removing saved git user"));
+          } else if (removeGitUser(savedUser.email)) {
+            console.log(chalk.green("✅ Removed saved git user"));
+            console.log(chalk.blueBright("👤"), chalk.green(formatSavedGitUser(savedUser)));
+            break;
+          } else {
+            console.log(chalk.red("❌ Failed to remove saved git user"));
+          }
+          break;
+        }
+
+        console.log(chalk.yellow("⚠️ Invalid selection. Choose 1, 2, 3, 4, or press Enter."));
+      }
+
+      if (selectedUser === savedUser) {
+        break;
+      }
       continue;
     }
 
@@ -2291,46 +2426,13 @@ async function runGitUserSwitch(generateSsh) {
       continue;
     }
 
-    if (answer === "3" || answer === "remove") {
-      await runGitUserRemove();
-      continue;
-    }
-
-    if (answer === "4" || answer === "generate" || answer === "ssh") {
-      if (typeof generateSsh === "function") {
-        await generateSsh();
-      }
-      return;
-    }
-
-    if (answer === "5" || answer === "change") {
-      const currentGlobal = getGitUser("--global") || { name: "", email: "" };
-      if (currentGlobal.name || currentGlobal.email) {
-        console.log(
-          chalk.blueBright("👤 Current global user:"),
-          chalk.green(`${currentGlobal.name || "(not set)"} <${currentGlobal.email || "(not set)"}>`),
-        );
-      } else {
-        console.log(chalk.yellow("ℹ️ No global git user is set yet."));
-      }
-      selectedUser = await selectSavedGitUser("👥 Choose a saved git user:", false);
-      if (selectedUser) {
-        console.log(chalk.green(`✅ Selected: ${formatSavedGitUser(selectedUser)}`));
-        break;
-      }
-      continue;
-    }
-
-    if (answer === "6" || answer === "global" || answer === "configure") {
-      break;
-    }
-
-    if (answer === "7" || answer === "clear") {
+    if (answer === "3" || answer === "clear") {
       console.clear();
       continue;
     }
 
-    console.log(chalk.yellow("⚠️ Invalid selection. Try again."));
+    console.log(chalk.yellow("⚠️ Invalid selection. Exiting."));
+    return;
   }
 
   const currentGlobal = getGitUser("--global") || { name: "", email: "" };
@@ -2650,20 +2752,6 @@ async function runGitUserSwitch(generateSsh) {
 
 }
 
-function showSavedGitUsers(title = "👥 Saved git users:") {
-  const savedUsers = getGitUsers();
-
-  console.log();
-  console.log(chalk.blueBright(title));
-  if (savedUsers.length === 0) {
-    console.log(chalk.gray("  No saved users found"));
-    return;
-  }
-  savedUsers.forEach((user, index) => {
-    console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
-  });
-}
-
 async function selectSavedGitUser(title = "👥 Saved git users:", allowManagement = true) {
   let savedUsers = getGitUsers();
 
@@ -2726,4 +2814,5 @@ module.exports = {
   selectGitUserForSsh,
   runGitUserAdd,
   runGitUserRemove,
+  testGitUserConnection,
 };
