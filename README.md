@@ -2,8 +2,6 @@
 
 `qme-cli` is a cross-platform developer command-line toolkit focused on speeding up everyday project setup and workflow tasks.
 
-
-
 Package: `@ramkumarbedia/xqme`
 
 ## Install
@@ -55,6 +53,12 @@ After selecting a saved user, the submenu provides:
 - **Make global user** — set the selected account as the global Git user.
 - **Remove User** — remove the selected account from saved users.
 
+Saved users are identified by their name, email, and provider, so the same
+email can be saved separately for GitHub and GitLab. The provider is optional;
+when it is set, **Test Connection** uses `github.com` or `gitlab.com` as the
+default SSH host. SSH keys generated for a user are saved in QME config and
+used by subsequent connection tests.
+
 ## QME config
 
 ```bash
@@ -65,4 +69,3 @@ Use this command to:
 
 - Open the QME configuration file in VS Code
 - Export a backup of the QME configuration
-
