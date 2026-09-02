@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.0.9 — 2026 March 26 08:21 AM
+
+- Documented the `qme git users` Git account management feature.
+
 ## 4.0.8
 
 - Improved saved Git user management with provider-aware matching and display.
