@@ -34,30 +34,23 @@ The Push option pushes the current local branch without pulling first. Choose Ab
 qme git users
 ```
 
-The interactive menu provides:
+`qme git users` is an interactive Git account manager. It lets you save
+multiple Git identities and switch between them without re-entering account
+details each time.
 
-1. **Users** — select a saved Git account. A user is marked `(active)` when
-   its saved SSH key matches an `IdentityFile` in `~/.ssh/config`.
-2. **Add a new user** — save a Git name, email, and provider.
-3. **Git global user** — display the current global `git user.name` and
-   `git user.email`, then press Enter to return to the menu.
-4. **Clear terminal** — clear the terminal and keep the menu open.
+From the menu you can:
 
-After selecting a saved user, the submenu provides:
+- View saved Git users and see which SSH identity is currently active
+- Add or remove a saved user with a name, email, and optional provider
+- Generate an SSH key and update the SSH configuration for a user
+- Test the user’s SSH connection, using GitHub or GitLab as the default host
+- Activate a user’s SSH identity in `~/.ssh/config`
+- Set the selected user as the global Git user
+- View the current global Git user or clear the terminal
 
-- **Generate SSH** — create an SSH key and update the SSH configuration.
-- **Test Connection** — test SSH access for the selected account. Unknown
-  hosts request `Y/n` confirmation before connecting.
-- **Active this user** — read the selected user’s saved `identityFile` from
-  QME config and update the `IdentityFile` entries in `~/.ssh/config`.
-- **Make global user** — set the selected account as the global Git user.
-- **Remove User** — remove the selected account from saved users.
-
-Saved users are identified by their name, email, and provider, so the same
-email can be saved separately for GitHub and GitLab. The provider is optional;
-when it is set, **Test Connection** uses `github.com` or `gitlab.com` as the
-default SSH host. SSH keys generated for a user are saved in QME config and
-used by subsequent connection tests.
+Users are matched by name, email, and provider, allowing separate GitHub and
+GitLab identities to use the same email address. Generated SSH identity files
+are saved in QME config for future connection tests.
 
 ## QME config
 
