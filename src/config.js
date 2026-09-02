@@ -397,12 +397,17 @@ function normalizeGitUserEntry(entry) {
     const name = String(entry?.name || "").trim();
     const email = String(entry?.email || "").trim();
     const provider = String(entry?.provider || "").trim().toLowerCase();
+    const identityFile = String(entry?.identityFile || "").trim();
 
     if (!name || !email) {
         return null;
     }
 
-    return provider ? { name, email, provider } : { name, email };
+    const normalized = provider ? { name, email, provider } : { name, email };
+    if (identityFile) {
+        normalized.identityFile = identityFile;
+    }
+    return normalized;
 }
 
 function getGitUsers() {
@@ -438,6 +443,9 @@ function addOrUpdateGitUser(user) {
         String(item?.provider || "").trim().toLowerCase() === providerKey
     );
     if (index >= 0) {
+        if (!normalized.identityFile && users[index]?.identityFile) {
+            normalized.identityFile = String(users[index].identityFile).trim();
+        }
         users[index] = normalized;
     } else {
         users.push(normalized);

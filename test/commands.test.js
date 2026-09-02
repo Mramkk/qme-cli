@@ -87,10 +87,12 @@ test("node tool aliases map n to npm", () => {
 
 test("xampp command maps xstop to the platform stop operation", async () => {
   let stopped = false;
+  let stopOptions;
   await runXamppCommand(["xstop"], {
     runXamppStartByPlatform: () => {},
-    runXamppStopByPlatform: async () => {
+    runXamppStopByPlatform: async (options) => {
       stopped = true;
+      stopOptions = options;
     },
     runXamppSwitch: async () => {},
     resolveXamppPhpIniPath: () => "",
@@ -99,6 +101,7 @@ test("xampp command maps xstop to the platform stop operation", async () => {
   });
 
   assert.equal(stopped, true);
+  assert.equal(stopOptions.killCodeFirst, true);
 });
 
 test("xampp switch forwards the requested version", async () => {

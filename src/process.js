@@ -1,4 +1,5 @@
 const { spawnSync } = require("child_process");
+const { withSpinnerSync } = require("./loading");
 
 /**
  * Run an executable with arguments without invoking a shell.
@@ -9,14 +10,19 @@ function runSync(command, args = [], options = {}) {
   const stdio = process.env.QME_QUIET === "1" && options.stdio === "inherit"
     ? "ignore"
     : options.stdio;
-  const result = spawnSync(command, args, {
-    cwd: options.cwd,
-    encoding: options.encoding || "utf8",
-    input: options.input,
-    stdio,
-    windowsHide: options.windowsHide ?? true,
-    shell: false,
-  });
+  const run = () =>
+    spawnSync(command, args, {
+      cwd: options.cwd,
+      encoding: options.encoding || "utf8",
+      input: options.input,
+      stdio,
+      windowsHide: options.windowsHide ?? true,
+      shell: false,
+    });
+  const result =
+    options.loading === false || stdio !== "inherit"
+      ? run()
+      : withSpinnerSync(`Running ${command}`, run);
 
   if (result.error && options.allowFailure !== true) {
     throw result.error;

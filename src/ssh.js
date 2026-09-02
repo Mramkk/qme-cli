@@ -63,6 +63,7 @@ function getDefaultSshEmail() {
 
 function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
     const normalizedHost = String(hostName || "").trim();
+    const hostKey = normalizedHost.toLowerCase();
     if (!normalizedHost) {
         throw new Error("SSH host name is required");
     }
@@ -76,7 +77,7 @@ function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
     const output = [];
     const identityFile = `~/.ssh/${path.basename(privateKeyPath).replace(/\\/g, "/")}`;
     let currentBlock = [];
-    let hostExists = false;
+    let hostUpdated = false;
 
     const flushBlock = () => {
         if (!currentBlock.length) {
@@ -89,9 +90,8 @@ function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
             ? hostLine.replace(/^\s*Host\s+/i, "").trim().split(/\s+/)
             : [];
 
-        if (hosts.includes(normalizedHost)) {
-            hostExists = true;
-            output.push(...currentBlock);
+        if (hosts.some((host) => host.toLowerCase() === hostKey)) {
+            hostUpdated = true;
         } else {
             output.push(...currentBlock);
         }
@@ -106,10 +106,6 @@ function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
         currentBlock.push(line);
     });
     flushBlock();
-
-    if (hostExists) {
-        return { configPath, created: false };
-    }
 
     while (output.length && !output[output.length - 1].trim()) {
         output.pop();
@@ -128,7 +124,7 @@ function updateSshConfig({ homeDir, hostName, privateKeyPath }) {
 
     fs.mkdirSync(sshDir, { recursive: true });
     fs.writeFileSync(configPath, output.join("\n"), "utf8");
-    return { configPath, created: true };
+    return { configPath, created: !hostUpdated, updated: hostUpdated, identityFile };
 }
 
 function buildKeyFileName(tagInput, keyType = "rsa") {

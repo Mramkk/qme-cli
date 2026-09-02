@@ -107,14 +107,14 @@ function createXamppPlatformOperations({
   runWindowsXamppStop,
   chalk,
 }) {
-  function runXamppStartByPlatform() {
+  function runXamppStartByPlatform(options = {}) {
     if (process.platform === "darwin") {
       runMacXamppStart();
       return;
     }
 
     if (process.platform === "win32") {
-      runWindowsXamppStart();
+      runWindowsXamppStart(options);
       return;
     }
 
@@ -122,14 +122,14 @@ function createXamppPlatformOperations({
     process.exit(1);
   }
 
-  async function runXamppStopByPlatform() {
+  async function runXamppStopByPlatform(options = {}) {
     if (process.platform === "darwin") {
       await runMacXamppStop();
       return;
     }
 
     if (process.platform === "win32") {
-      await runWindowsXamppStop();
+      await runWindowsXamppStop(options);
       return;
     }
 
@@ -463,6 +463,7 @@ function createXamppProjectBrowser({
     console.log(chalk.blueBright("XAMPP projects:"));
     projects.forEach((project, index) => {
       console.log(chalk.green(`  ${index + 1}) ${project}`));
+      console.log(chalk.gray(`     ${path.join(htdocsPath, project)}`));
     });
     console.log();
 

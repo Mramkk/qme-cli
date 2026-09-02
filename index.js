@@ -14,6 +14,7 @@ const {
   runGitUserAdd,
   runGitUserRemove,
   selectGitUserForSsh,
+  testGitUserConnection,
 } = require("./src/git.js");
 const { generateGitSshKey, updateSshConfig } = require("./src/ssh.js");
 const { askQuestion, askSshTag } = require("./src/prompts.js");
@@ -37,6 +38,7 @@ const {
   getUpdateCheckSetting,
   setUpdateCheckSetting,
   getSprintMailRecipients,
+  addOrUpdateGitUser,
 } = require("./src/config.js");
 const { runUpdateFlow, autoCheckUpdateOnStartup } = require("./src/update.js");
 const { getProjectRepoUrl, getCurrentIpAddress } = require("./src/utils.js");
@@ -80,7 +82,12 @@ const {
 } = require("./src/services/xampp");
 const { getXamppPathCandidates, resolveXamppHtdocsPath, resolveXamppPhpIniPath } =
   createXamppPathResolver({ getXamppPath, chalk });
-const { parseFileUriToPath, resolveLastVsCodeProjectPath, tryOpenInVsCode } = createVsCodeService({
+const {
+  parseFileUriToPath,
+  resolveLastVsCodeProjectPath,
+  getOpenVsCodePaths,
+  tryOpenInVsCode,
+} = createVsCodeService({
   spawnSync,
   chalk,
 });
@@ -1308,11 +1315,13 @@ async function main() {
       runGitUserSwitch,
       runGitUserAdd,
       runGitUserRemove,
+      addOrUpdateGitUser,
       selectGitUserForSsh,
       askQuestion,
       askSshTag,
       generateGitSshKey,
       updateSshConfig,
+      testGitUserConnection,
       getOptionValue,
       getProjectRepoUrl,
       setProjectIdForRepo,
@@ -1429,6 +1438,23 @@ async function main() {
       askQuestion,
       getXamppPath,
       setXamppPath,
+      onMysqlReady: () => runMysqlPermission(getXamppPath),
+      onBeforeStop: () => {
+        const roots = getXamppPathCandidates().map((root) => `${root.toLowerCase()}\\`);
+        const paths = getOpenVsCodePaths().filter((targetPath) => {
+          const normalized = targetPath.toLowerCase();
+          return roots.some((root) => normalized.startsWith(root));
+        });
+
+        console.log(chalk.blueBright("VS Code XAMPP paths:"));
+        if (paths.length === 0) {
+          console.log(chalk.gray("  None found"));
+          return;
+        }
+        paths.forEach((targetPath, index) => {
+          console.log(chalk.green(`  ${index + 1}. ${targetPath}`));
+        });
+      },
     })
   )
     return;

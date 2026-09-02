@@ -86,6 +86,27 @@ function parseMysqlLines(output) {
     .filter(Boolean);
 }
 
+function escapePowerShellArgument(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function quoteWindowsArgument(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
+function runElevatedWindowsCommand(command, args) {
+  const commandArguments = args.map(quoteWindowsArgument).join(" ");
+  const script = [
+    `$process = Start-Process -FilePath ${escapePowerShellArgument(command)} -ArgumentList ${escapePowerShellArgument(commandArguments)} -Verb RunAs -Wait -PassThru`,
+    "exit $process.ExitCode",
+  ].join("; ");
+
+  return spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    stdio: "inherit",
+    windowsHide: true,
+  });
+}
+
 function runMysqlPermission(getXamppPath) {
   if (process.platform !== "win32") {
     console.log(chalk.red("❌ This command is only available on Windows"));
@@ -106,25 +127,30 @@ function runMysqlPermission(getXamppPath) {
   }
 
   const username = String(process.env.USERNAME || "").trim();
+  const userDomain = String(process.env.USERDOMAIN || "").trim();
+  const permissionPrincipal = userDomain ? `${userDomain}\\${username}` : username;
   if (!username) {
     console.log(chalk.red("❌ Windows username could not be detected"));
     process.exit(1);
   }
 
   console.log(chalk.cyan(`Applying permissions to: ${mysqlDataPath}`));
-  const attribResult = spawnSync("attrib", ["-R", path.join(mysqlDataPath, "*"), "/S", "/D"], {
-    stdio: "inherit",
-    windowsHide: true,
-  });
+  const attribResult = runElevatedWindowsCommand("attrib.exe", [
+    "-R",
+    path.join(mysqlDataPath, "*"),
+    "/S",
+    "/D",
+  ]);
   if (attribResult.error || attribResult.status !== 0) {
     console.log(chalk.red("❌ Failed to remove read-only attributes"));
     process.exit(1);
   }
 
-  const icaclsResult = spawnSync("icacls", [mysqlDataPath, "/grant", `${username}:(OI)(CI)M`], {
-    stdio: "inherit",
-    windowsHide: true,
-  });
+  const icaclsResult = runElevatedWindowsCommand("icacls.exe", [
+    mysqlDataPath,
+    "/grant",
+    `${permissionPrincipal}:(OI)(CI)M`,
+  ]);
   if (icaclsResult.error || icaclsResult.status !== 0) {
     console.log(chalk.red("❌ Permission update failed. Run this command as Administrator."));
     process.exit(1);

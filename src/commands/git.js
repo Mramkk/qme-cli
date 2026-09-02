@@ -10,11 +10,13 @@ async function runGitCommand(
     runGitUserSwitch,
     runGitUserAdd,
     runGitUserRemove,
+    addOrUpdateGitUser,
     selectGitUserForSsh,
     askQuestion,
     askSshTag,
     generateGitSshKey,
     updateSshConfig,
+    testGitUserConnection,
     getOptionValue,
     getProjectRepoUrl,
     setProjectIdForRepo,
@@ -84,8 +86,8 @@ async function runGitCommand(
       return true;
     }
 
-    await runGitUserSwitch(async () => {
-      const selectedUser = await selectGitUserForSsh();
+    await runGitUserSwitch(async (selectedUserOverride) => {
+      const selectedUser = selectedUserOverride || (await selectGitUserForSsh());
       if (!selectedUser) {
         console.log(chalk.gray("⏹️ SSH key setup cancelled"));
         return;
@@ -114,13 +116,14 @@ async function runGitCommand(
         hostName,
         privateKeyPath: generatedKey.privateKeyPath,
       });
+      addOrUpdateGitUser({ ...selectedUser, identityFile: sshConfigPath.identityFile });
       console.log(
         sshConfigPath.created
           ? chalk.green("✅ SSH config profile created")
-          : chalk.yellow("ℹ️ SSH host already exists; config was not changed"),
+          : chalk.green("✅ Existing SSH host profile replaced"),
       );
       console.log(chalk.blueBright("📄 SSH config:"), chalk.cyan(sshConfigPath.configPath));
-    });
+    }, testGitUserConnection);
     return true;
   }
 
@@ -160,10 +163,11 @@ async function runGitCommand(
     hostName,
     privateKeyPath: generatedKey.privateKeyPath,
   });
+  addOrUpdateGitUser({ ...selectedUser, identityFile: sshConfigPath.identityFile });
   console.log(
     sshConfigPath.created
       ? chalk.green("✅ SSH config profile created")
-      : chalk.yellow("ℹ️ SSH host already exists; config was not changed"),
+      : chalk.green("✅ Existing SSH host profile replaced"),
   );
   console.log(chalk.blueBright("📄 SSH config:"), chalk.cyan(sshConfigPath.configPath));
   return true;

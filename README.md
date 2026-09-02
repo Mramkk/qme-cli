@@ -2,8 +2,6 @@
 
 `qme-cli` is a cross-platform developer command-line toolkit focused on speeding up everyday project setup and workflow tasks.
 
-
-
 Package: `@ramkumarbedia/xqme`
 
 ## Install
@@ -36,14 +34,23 @@ The Push option pushes the current local branch without pulling first. Choose Ab
 qme git users
 ```
 
-Use this command to:
+`qme git users` is an interactive Git account manager. It lets you save
+multiple Git identities and switch between them without re-entering account
+details each time.
 
-- Switch between saved Git accounts
-- Add a new Git user with a name and email
-- Remove a saved Git user
-- Enter a Git name and email manually when no saved user is selected
-- Update the global `git user.name` and `git user.email` values
-- Generate an SSH key
+From the menu you can:
+
+- View saved Git users and see which SSH identity is currently active
+- Add or remove a saved user with a name, email, and optional provider
+- Generate an SSH key and update the SSH configuration for a user
+- Test the user’s SSH connection, using GitHub or GitLab as the default host
+- Activate a user’s SSH identity in `~/.ssh/config`
+- Set the selected user as the global Git user
+- View the current global Git user or clear the terminal
+
+Users are matched by name, email, and provider, allowing separate GitHub and
+GitLab identities to use the same email address. Generated SSH identity files
+are saved in QME config for future connection tests.
 
 ## QME config
 
@@ -55,4 +62,3 @@ Use this command to:
 
 - Open the QME configuration file in VS Code
 - Export a backup of the QME configuration
-
