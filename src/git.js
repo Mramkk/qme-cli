@@ -2199,7 +2199,7 @@ async function runGitUserRemove() {
   }
 
   console.log();
-  console.log(chalk.blueBright("👥 Saved git users:"));
+  console.log(chalk.blueBright("👥 git users:"));
   savedUsers.forEach((user, index) => {
     console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
   });
@@ -2317,6 +2317,77 @@ async function testGitUserConnection(user, askHost = askQuestion) {
   }
 }
 
+function normalizeSshIdentityFile(identityFile) {
+  let value = String(identityFile || "").trim().replace(/^['"]|['"]$/g, "");
+  if (!value) {
+    return "";
+  }
+
+  value = value.replace(/^~(?=$|[\\/])/, os.homedir());
+  return path.normalize(path.resolve(value)).toLowerCase();
+}
+
+function getConfiguredSshIdentityFiles() {
+  const configPath = path.join(os.homedir(), ".ssh", "config");
+  if (!fs.existsSync(configPath)) {
+    return new Set();
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, "utf8");
+    const identityFiles = content
+      .split(/\r?\n/)
+      .map((line) => line.match(/^\s*IdentityFile\s+(.+)$/i)?.[1])
+      .filter(Boolean)
+      .map(normalizeSshIdentityFile)
+      .filter(Boolean);
+    return new Set(identityFiles);
+  } catch {
+    return new Set();
+  }
+}
+
+function isGitUserSshActive(user, configuredIdentityFiles) {
+  const identityFile = normalizeSshIdentityFile(user?.identityFile);
+  return Boolean(identityFile && configuredIdentityFiles.has(identityFile));
+}
+
+function activateGitUserSsh(user) {
+  const identityFile = String(user?.identityFile || "").trim();
+  if (!identityFile) {
+    console.log(chalk.yellow("⚠️ No SSH identity file is saved for this user in QME config."));
+    return false;
+  }
+
+  const configPath = path.join(os.homedir(), ".ssh", "config");
+  if (!fs.existsSync(configPath)) {
+    console.log(chalk.yellow(`⚠️ SSH config not found: ${configPath}`));
+    return false;
+  }
+
+  try {
+    const content = fs.readFileSync(configPath, "utf8");
+    const updatedContent = content.replace(
+      /^(\s*)IdentityFile\s+.*$/gim,
+      `$1IdentityFile ${identityFile}`,
+    );
+
+    if (updatedContent === content) {
+      console.log(chalk.yellow("⚠️ No IdentityFile entry found in SSH config."));
+      return false;
+    }
+
+    fs.writeFileSync(configPath, updatedContent, "utf8");
+    console.log(chalk.green(`✅ Active SSH user updated: ${user.name} <${user.email}>`));
+    console.log(chalk.blueBright("📄 SSH config:"), chalk.cyan(configPath));
+    return true;
+  } catch (error) {
+    console.log(chalk.red("❌ Failed to update SSH config"));
+    console.log(chalk.yellow(error.message));
+    return false;
+  }
+}
+
 async function runGitUserSwitch(generateSsh, testConnection) {
   let selectedUser = null;
   const inRepo = isInsideGitRepo();
@@ -2338,13 +2409,14 @@ async function runGitUserSwitch(generateSsh, testConnection) {
     }
     firstMenu = false;
 
-    console.log(chalk.blueBright("👥 Saved git users:"));
+    console.log(chalk.blueBright("👥 git users:"));
     console.log(chalk.yellow("  1) Users"));
     console.log(chalk.yellow("  2) Add a new user"));
-    console.log(chalk.yellow("  3) Clear terminal"));
+    console.log(chalk.yellow("  3) Git global user"));
+    console.log(chalk.yellow("  4) Clear terminal"));
 
     const answer = String(
-      await askQuestion(chalk.yellow("👉 Choose an option (1-3, Enter = abort): ")),
+      await askQuestion(chalk.yellow("👉 Choose an option (1-4, Enter = abort): ")),
     ).trim().toLowerCase();
 
     if (!answer) {
@@ -2363,11 +2435,12 @@ async function runGitUserSwitch(generateSsh, testConnection) {
         console.log(chalk.blueBright(`👤 Selected: ${formatSavedGitUser(savedUser)}`));
         console.log(chalk.yellow("  1) Generate SSH"));
         console.log(chalk.yellow("  2) Test Connection"));
-        console.log(chalk.yellow("  3) Make global user"));
-        console.log(chalk.yellow("  4) Remove User"));
+        console.log(chalk.yellow("  3) Active this user"));
+        console.log(chalk.yellow("  4) Make global user"));
+        console.log(chalk.yellow("  5) Remove User"));
 
         const userAction = String(
-          await askQuestion(chalk.yellow("👉 Choose an option (1-4): ")),
+          await askQuestion(chalk.yellow("👉 Choose an option (1-5): ")),
         )
           .trim()
           .toLowerCase();
@@ -2390,12 +2463,17 @@ async function runGitUserSwitch(generateSsh, testConnection) {
           break;
         }
 
-        if (userAction === "3" || userAction === "global") {
+        if (userAction === "3" || userAction === "active") {
+          activateGitUserSsh(savedUser);
+          break;
+        }
+
+        if (userAction === "4" || userAction === "global") {
           selectedUser = savedUser;
           break;
         }
 
-        if (userAction === "4" || userAction === "remove" || userAction === "rm") {
+        if (userAction === "5" || userAction === "remove" || userAction === "rm") {
           const confirmed = await askYesNo(
             chalk.yellow(`Remove ${formatSavedGitUser(savedUser)} from saved users?`),
             false,
@@ -2412,7 +2490,7 @@ async function runGitUserSwitch(generateSsh, testConnection) {
           break;
         }
 
-        console.log(chalk.yellow("⚠️ Invalid selection. Choose 1, 2, 3, 4, or press Enter."));
+        console.log(chalk.yellow("⚠️ Invalid selection. Choose 1, 2, 3, 4, 5, or press Enter."));
       }
 
       if (selectedUser === savedUser) {
@@ -2426,7 +2504,21 @@ async function runGitUserSwitch(generateSsh, testConnection) {
       continue;
     }
 
-    if (answer === "3" || answer === "clear") {
+    if (answer === "3" || answer === "global" || answer === "configure") {
+      const currentGlobal = getGitUser("--global") || { name: "", email: "" };
+      if (currentGlobal.name || currentGlobal.email) {
+        console.log(
+          chalk.blueBright("👤 Current global user:"),
+          chalk.green(`${currentGlobal.name || "(not set)"} <${currentGlobal.email || "(not set)"}>`),
+        );
+      } else {
+        console.log(chalk.yellow("ℹ️ No global git user is set yet."));
+      }
+      await askQuestion(chalk.gray("👉 Press Enter to go back: "));
+      continue;
+    }
+
+    if (answer === "4" || answer === "clear") {
       console.clear();
       continue;
     }
@@ -2752,7 +2844,7 @@ async function runGitUserSwitch(generateSsh, testConnection) {
 
 }
 
-async function selectSavedGitUser(title = "👥 Saved git users:", allowManagement = true) {
+async function selectSavedGitUser(title = "👥 git users:", allowManagement = true) {
   let savedUsers = getGitUsers();
 
   while (true) {
@@ -2765,8 +2857,10 @@ async function selectSavedGitUser(title = "👥 Saved git users:", allowManageme
     if (savedUsers.length === 0) {
       console.log(chalk.gray("  No saved users found"));
     }
+    const configuredIdentityFiles = getConfiguredSshIdentityFiles();
     savedUsers.forEach((user, index) => {
-      console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`));
+      const activeLabel = isGitUserSshActive(user, configuredIdentityFiles) ? " (active)" : "";
+      console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}${activeLabel}`));
     });
 
     const answer = String(

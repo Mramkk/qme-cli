@@ -36,14 +36,24 @@ The Push option pushes the current local branch without pulling first. Choose Ab
 qme git users
 ```
 
-Use this command to:
+The interactive menu provides:
 
-- Switch between saved Git accounts
-- Add a new Git user with a name and email
-- Remove a saved Git user
-- Enter a Git name and email manually when no saved user is selected
-- Update the global `git user.name` and `git user.email` values
-- Generate an SSH key
+1. **Users** — select a saved Git account. A user is marked `(active)` when
+   its saved SSH key matches an `IdentityFile` in `~/.ssh/config`.
+2. **Add a new user** — save a Git name, email, and provider.
+3. **Git global user** — display the current global `git user.name` and
+   `git user.email`, then press Enter to return to the menu.
+4. **Clear terminal** — clear the terminal and keep the menu open.
+
+After selecting a saved user, the submenu provides:
+
+- **Generate SSH** — create an SSH key and update the SSH configuration.
+- **Test Connection** — test SSH access for the selected account. Unknown
+  hosts request `Y/n` confirmation before connecting.
+- **Active this user** — read the selected user’s saved `identityFile` from
+  QME config and update the `IdentityFile` entries in `~/.ssh/config`.
+- **Make global user** — set the selected account as the global Git user.
+- **Remove User** — remove the selected account from saved users.
 
 ## QME config
 
