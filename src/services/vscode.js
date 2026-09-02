@@ -97,20 +97,22 @@ function createVsCodeService({ spawnSync, chalk }) {
       const windows = storageData?.windowsState?.openedWindows || [];
       const lastWindow = storageData?.windowsState?.lastActiveWindow;
       const entries = [...windows, lastWindow].filter(Boolean);
-      return [...new Set(
-        entries
-          .map(
-            (entry) =>
-              entry.folder ||
-              entry.folderUri ||
-              entry.workspace ||
-              entry.workspaceUri ||
-              entry.filePath ||
-              "",
-          )
-          .map(parseFileUriToPath)
-          .filter(Boolean),
-      )];
+      return [
+        ...new Set(
+          entries
+            .map(
+              (entry) =>
+                entry.folder ||
+                entry.folderUri ||
+                entry.workspace ||
+                entry.workspaceUri ||
+                entry.filePath ||
+                "",
+            )
+            .map(parseFileUriToPath)
+            .filter(Boolean),
+        ),
+      ];
     } catch {
       return [];
     }
