@@ -2399,8 +2399,34 @@ function activateGitUserSsh(user) {
 
   const configPath = path.join(os.homedir(), ".ssh", "config");
   if (!fs.existsSync(configPath)) {
-    console.log(chalk.yellow(`⚠️ SSH config not found: ${configPath}`));
-    return false;
+    try {
+      const host = getGitUserSshHost(user);
+      if (!host) {
+        console.log(chalk.yellow("⚠️ No SSH host is saved for this user."));
+        return false;
+      }
+
+      fs.mkdirSync(path.dirname(configPath), { recursive: true });
+      fs.writeFileSync(
+        configPath,
+        [
+          `Host ${host}`,
+          `  HostName ${host}`,
+          "  User git",
+          `  IdentityFile ${identityFile}`,
+          "  IdentitiesOnly yes",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+      console.log(chalk.green(`✅ SSH config created: ${configPath}`));
+      console.log(chalk.green(`✅ Active SSH user updated: ${user.name} <${user.email}>`));
+      return true;
+    } catch (error) {
+      console.log(chalk.red("❌ Failed to create SSH config"));
+      console.log(chalk.yellow(error.message));
+      return false;
+    }
   }
 
   try {
