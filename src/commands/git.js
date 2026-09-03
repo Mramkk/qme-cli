@@ -116,7 +116,11 @@ async function runGitCommand(
         hostName,
         privateKeyPath: generatedKey.privateKeyPath,
       });
-      addOrUpdateGitUser({ ...selectedUser, identityFile: sshConfigPath.identityFile });
+      addOrUpdateGitUser({
+        ...selectedUser,
+        identityFile: sshConfigPath.identityFile,
+        sshHost: hostName.trim(),
+      });
       console.log(
         sshConfigPath.created
           ? chalk.green("✅ SSH config profile created")
@@ -163,7 +167,11 @@ async function runGitCommand(
     hostName,
     privateKeyPath: generatedKey.privateKeyPath,
   });
-  addOrUpdateGitUser({ ...selectedUser, identityFile: sshConfigPath.identityFile });
+  addOrUpdateGitUser({
+    ...selectedUser,
+    identityFile: sshConfigPath.identityFile,
+    sshHost: hostName.trim(),
+  });
   console.log(
     sshConfigPath.created
       ? chalk.green("✅ SSH config profile created")

@@ -1,6 +1,6 @@
 {
   "name": "@ramkumarbedia/xqme",
-  "version": "4.0.9",
+  "version": "4.0.10",
   "description": "Cross-platform developer command-line toolkit",
   "main": "index.js",
   "bin": {

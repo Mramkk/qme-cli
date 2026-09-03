@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 4.0.10 — 2026 September 3
+
+- Create the SSH config and saved host profile automatically when activating a Git user and the config is missing.
+
 ## 4.0.9 — 2026 March 26 08:21 AM
 
 - Documented the `qme git users` Git account management feature.
