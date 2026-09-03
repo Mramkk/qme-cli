@@ -27,8 +27,7 @@ const { loadOrCreateRepoConfig, getGitUsers, addOrUpdateGitUser, removeGitUser, 
 const REMOTE = "origin";
 
 function formatSavedGitUser(user) {
-  const provider = String(user?.provider || "").trim();
-  return `${user.name} <${user.email}>${provider ? ` (${provider})` : ""}`;
+  return `${user.name} <${user.email}>`;
 }
 
 function isGitLabRepo(repoUrl) {
@@ -2157,6 +2156,11 @@ async function runGitUserAdd() {
       : providerAnswer === "2" || providerAnswer === "github"
         ? "github"
         : "";
+  const defaultSshHost = provider === "github" ? "github.com" : provider === "gitlab" ? "gitlab.com" : "";
+  const sshHostInput = await askQuestion(
+    chalk.yellow(`🌐 SSH hostname${defaultSshHost ? ` (Enter = ${defaultSshHost})` : ""}: `),
+  );
+  const sshHost = String(sshHostInput || "").trim() || defaultSshHost;
 
   const nameKey = String(name).trim().toLowerCase();
   const emailKey = String(email).trim().toLowerCase();
@@ -2179,7 +2183,7 @@ async function runGitUserAdd() {
     }
   }
 
-  const ok = addOrUpdateGitUser({ name, email, provider });
+  const ok = addOrUpdateGitUser({ name, email, provider, sshHost });
   if (!ok) {
     console.log(chalk.red("❌ Failed to save git user"));
     process.exit(1);
@@ -2317,6 +2321,16 @@ async function testGitUserConnection(user, askHost = askQuestion) {
   }
 }
 
+function getGitUserSshHost(user) {
+  const savedHost = String(user?.sshHost || "").trim();
+  if (savedHost) {
+    return savedHost;
+  }
+
+  const provider = String(user?.provider || "").trim().toLowerCase();
+  return provider === "github" ? "github.com" : provider === "gitlab" ? "gitlab.com" : "";
+}
+
 function normalizeSshIdentityFile(identityFile) {
   let value = String(identityFile || "").trim().replace(/^['"]|['"]$/g, "");
   if (!value) {
@@ -2327,29 +2341,53 @@ function normalizeSshIdentityFile(identityFile) {
   return path.normalize(path.resolve(value)).toLowerCase();
 }
 
-function getConfiguredSshIdentityFiles() {
+function getSshHostBlock(content, hostName) {
+  const requestedHost = String(hostName || "").trim().toLowerCase();
+  if (!requestedHost) {
+    return null;
+  }
+
+  const lines = content.split(/\r?\n/);
+  let blockStart = -1;
+  for (let index = 0; index <= lines.length; index += 1) {
+    const startsHost = index < lines.length && /^\s*Host\s+/i.test(lines[index]);
+    if (startsHost || index === lines.length) {
+      if (blockStart >= 0) {
+        const hostLine = lines[blockStart].replace(/^\s*Host\s+/i, "").trim();
+        const hosts = hostLine.split(/\s+/).filter(Boolean);
+        if (hosts.some((host) => host.toLowerCase() === requestedHost)) {
+          return { lines, start: blockStart, end: index };
+        }
+      }
+      blockStart = startsHost ? index : -1;
+    }
+  }
+
+  return null;
+}
+
+function isGitUserSshActive(user) {
+  const identityFile = normalizeSshIdentityFile(user?.identityFile);
+  const host = getGitUserSshHost(user);
   const configPath = path.join(os.homedir(), ".ssh", "config");
-  if (!fs.existsSync(configPath)) {
-    return new Set();
+  if (!identityFile || !host || !fs.existsSync(configPath)) {
+    return false;
   }
 
   try {
     const content = fs.readFileSync(configPath, "utf8");
-    const identityFiles = content
-      .split(/\r?\n/)
+    const block = getSshHostBlock(content, host);
+    if (!block) {
+      return false;
+    }
+    const configuredIdentityFile = block.lines
+      .slice(block.start, block.end)
       .map((line) => line.match(/^\s*IdentityFile\s+(.+)$/i)?.[1])
-      .filter(Boolean)
-      .map(normalizeSshIdentityFile)
-      .filter(Boolean);
-    return new Set(identityFiles);
+      .find(Boolean);
+    return normalizeSshIdentityFile(configuredIdentityFile) === identityFile;
   } catch {
-    return new Set();
+    return false;
   }
-}
-
-function isGitUserSshActive(user, configuredIdentityFiles) {
-  const identityFile = normalizeSshIdentityFile(user?.identityFile);
-  return Boolean(identityFile && configuredIdentityFiles.has(identityFile));
 }
 
 function activateGitUserSsh(user) {
@@ -2367,13 +2405,33 @@ function activateGitUserSsh(user) {
 
   try {
     const content = fs.readFileSync(configPath, "utf8");
-    const updatedContent = content.replace(
-      /^(\s*)IdentityFile\s+.*$/gim,
-      `$1IdentityFile ${identityFile}`,
+    const host = getGitUserSshHost(user);
+    if (!host) {
+      console.log(chalk.yellow("⚠️ No SSH host is saved for this user."));
+      return false;
+    }
+
+    const block = getSshHostBlock(content, host);
+    if (!block) {
+      console.log(chalk.yellow(`⚠️ SSH host profile not found: ${host}`));
+      return false;
+    }
+
+    const blockLines = block.lines.slice(block.start, block.end);
+    const updatedBlockLines = blockLines.map((line) =>
+      line.replace(/^(\s*)IdentityFile\s+.*$/i, `$1IdentityFile ${identityFile}`),
     );
+    if (updatedBlockLines.every((line, index) => line === blockLines[index])) {
+      console.log(chalk.yellow(`⚠️ No IdentityFile entry found for SSH host: ${host}`));
+      return false;
+    }
+
+    const updatedLines = [...block.lines];
+    updatedLines.splice(block.start, block.end - block.start, ...updatedBlockLines);
+    const updatedContent = updatedLines.join("\n");
 
     if (updatedContent === content) {
-      console.log(chalk.yellow("⚠️ No IdentityFile entry found in SSH config."));
+      console.log(chalk.yellow(`⚠️ No IdentityFile entry found for SSH host: ${host}`));
       return false;
     }
 
@@ -2433,14 +2491,15 @@ async function runGitUserSwitch(generateSsh, testConnection) {
       while (true) {
         console.log();
         console.log(chalk.blueBright(`👤 Selected: ${formatSavedGitUser(savedUser)}`));
-        console.log(chalk.yellow("  1) Generate SSH"));
-        console.log(chalk.yellow("  2) Test Connection"));
-        console.log(chalk.yellow("  3) Active this user"));
-        console.log(chalk.yellow("  4) Make global user"));
-        console.log(chalk.yellow("  5) Remove User"));
+        console.log(chalk.yellow("  1) Test Connection"));
+        console.log(chalk.yellow("  2) Show Details"));
+        console.log(chalk.yellow("  3) Generate SSH"));
+        console.log(chalk.yellow("  4) Active this user"));
+        console.log(chalk.yellow("  5) Make global user"));
+        console.log(chalk.yellow("  6) Remove User"));
 
         const userAction = String(
-          await askQuestion(chalk.yellow("👉 Choose an option (1-5): ")),
+          await askQuestion(chalk.yellow("👉 Choose an option (1-6): ")),
         )
           .trim()
           .toLowerCase();
@@ -2449,31 +2508,46 @@ async function runGitUserSwitch(generateSsh, testConnection) {
           break;
         }
 
-        if (userAction === "1" || userAction === "ssh" || userAction === "generate") {
-          if (typeof generateSsh === "function") {
-            await generateSsh(savedUser);
-          }
-          break;
-        }
-
-        if (userAction === "2" || userAction === "test" || userAction === "connection") {
+        if (userAction === "1" || userAction === "test" || userAction === "connection") {
           if (typeof testConnection === "function") {
             await testConnection(savedUser);
           }
           break;
         }
 
-        if (userAction === "3" || userAction === "active") {
+        if (userAction === "2" || userAction === "details" || userAction === "show") {
+          console.log();
+          console.log(chalk.blueBright("📋 Git user details:"));
+          console.log(chalk.gray("   Name:"), chalk.green(savedUser.name));
+          console.log(chalk.gray("   Email:"), chalk.green(savedUser.email));
+          console.log(chalk.gray("   Provider:"), chalk.green(savedUser.provider || "Not set"));
+          console.log(chalk.gray("   SSH hostname:"), chalk.green(savedUser.sshHost || "Not set"));
+          console.log(chalk.gray("   Identity file:"), chalk.green(savedUser.identityFile || "Not set"));
+          console.log(
+            chalk.gray("   Status:"),
+            isGitUserSshActive(savedUser) ? chalk.green("active") : chalk.yellow("inactive"),
+          );
+          break;
+        }
+
+        if (userAction === "3" || userAction === "ssh" || userAction === "generate") {
+          if (typeof generateSsh === "function") {
+            await generateSsh(savedUser);
+          }
+          break;
+        }
+
+        if (userAction === "4" || userAction === "active") {
           activateGitUserSsh(savedUser);
           break;
         }
 
-        if (userAction === "4" || userAction === "global") {
+        if (userAction === "5" || userAction === "global") {
           selectedUser = savedUser;
           break;
         }
 
-        if (userAction === "5" || userAction === "remove" || userAction === "rm") {
+        if (userAction === "6" || userAction === "remove" || userAction === "rm") {
           const confirmed = await askYesNo(
             chalk.yellow(`Remove ${formatSavedGitUser(savedUser)} from saved users?`),
             false,
@@ -2490,7 +2564,7 @@ async function runGitUserSwitch(generateSsh, testConnection) {
           break;
         }
 
-        console.log(chalk.yellow("⚠️ Invalid selection. Choose 1, 2, 3, 4, 5, or press Enter."));
+        console.log(chalk.yellow("⚠️ Invalid selection. Choose 1, 2, 3, 4, 5, 6, or press Enter."));
       }
 
       if (selectedUser === savedUser) {
@@ -2523,7 +2597,6 @@ async function runGitUserSwitch(generateSsh, testConnection) {
       continue;
     }
 
-    console.log(chalk.yellow("⚠️ Invalid selection. Exiting."));
     return;
   }
 
@@ -2857,10 +2930,9 @@ async function selectSavedGitUser(title = "👥 git users:", allowManagement = t
     if (savedUsers.length === 0) {
       console.log(chalk.gray("  No saved users found"));
     }
-    const configuredIdentityFiles = getConfiguredSshIdentityFiles();
     savedUsers.forEach((user, index) => {
-      const activeLabel = isGitUserSshActive(user, configuredIdentityFiles) ? " (active)" : "";
-      console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}${activeLabel}`));
+      const statusText = isGitUserSshActive(user) ? chalk.green(" - active") : "";
+      console.log(chalk.green(`  ${index + 1}) ${formatSavedGitUser(user)}`) + statusText);
     });
 
     const answer = String(

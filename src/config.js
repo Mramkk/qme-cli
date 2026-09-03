@@ -398,6 +398,7 @@ function normalizeGitUserEntry(entry) {
     const email = String(entry?.email || "").trim();
     const provider = String(entry?.provider || "").trim().toLowerCase();
     const identityFile = String(entry?.identityFile || "").trim();
+    const sshHost = String(entry?.sshHost || "").trim();
 
     if (!name || !email) {
         return null;
@@ -406,6 +407,9 @@ function normalizeGitUserEntry(entry) {
     const normalized = provider ? { name, email, provider } : { name, email };
     if (identityFile) {
         normalized.identityFile = identityFile;
+    }
+    if (sshHost) {
+        normalized.sshHost = sshHost;
     }
     return normalized;
 }
@@ -445,6 +449,9 @@ function addOrUpdateGitUser(user) {
     if (index >= 0) {
         if (!normalized.identityFile && users[index]?.identityFile) {
             normalized.identityFile = String(users[index].identityFile).trim();
+        }
+        if (!normalized.sshHost && users[index]?.sshHost) {
+            normalized.sshHost = String(users[index].sshHost).trim();
         }
         users[index] = normalized;
     } else {
