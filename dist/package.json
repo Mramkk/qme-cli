@@ -1,0 +1,44 @@
+{
+  "name": "@ramkumarbedia/xqme",
+  "version": "4.0.11",
+  "description": "Cross-platform developer command-line toolkit",
+  "main": "dist/index.js",
+  "bin": {
+    "qme": "dist/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "cli",
+    "node",
+    "cross-platform",
+    "tool"
+  ],
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "build": "node scripts/build-dist.js",
+    "check": "npm test && npm run lint && npm run format:check",
+    "prepublishOnly": "npm run check && npm run build",
+    "version:check": "node scripts/check-version.js",
+    "lint": "eslint index.js src test",
+    "format": "prettier --write src/commands src/services src/errors.js test",
+    "format:check": "prettier --check src/commands src/services src/errors.js test"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.0",
+    "javascript-obfuscator": "^4.1.1",
+    "prettier": "^3.9.6",
+    "terser": "^5.44.0"
+  }
+}
