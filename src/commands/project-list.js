@@ -5,7 +5,6 @@ async function runProjectListCommand({
   getSavedProjects,
   formatShortDateOnly,
   askQuestion,
-  prepareXamppForLaravelProject,
   tryOpenInVsCode,
   openProjectPicker,
   isWindows = false,
@@ -21,10 +20,6 @@ async function runProjectListCommand({
   if (isWindows) {
     if (Number.isInteger(pickedIndex)) {
       const selectedProject = projects[pickedIndex];
-      if (String(selectedProject.type || "").toLowerCase() === "laravel") {
-        const xamppReady = await prepareXamppForLaravelProject(selectedProject);
-        if (!xamppReady) return;
-      }
       tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
         newWindow: true,
       });
@@ -34,13 +29,6 @@ async function runProjectListCommand({
 
   if (Number.isInteger(pickedIndex)) {
     const selectedProject = projects[pickedIndex];
-    if (String(selectedProject.type || "").toLowerCase() === "laravel") {
-      const xamppReady = await prepareXamppForLaravelProject(selectedProject);
-      if (!xamppReady) {
-        console.log();
-        return;
-      }
-    }
     tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
       newWindow: true,
     });
@@ -83,14 +71,6 @@ async function runProjectListCommand({
   }
 
   const selectedProject = projects[selected - 1];
-  if (String(selectedProject.type || "").toLowerCase() === "laravel") {
-    const xamppReady = await prepareXamppForLaravelProject(selectedProject);
-    if (!xamppReady) {
-      console.log();
-      return;
-    }
-  }
-
   tryOpenInVsCode(selectedProject.path, `${selectedProject.type || "project"} project`, {
     newWindow: true,
   });

@@ -8,6 +8,7 @@ const { runConfigCommand } = require("../src/commands/config");
 const { runMysqlCommand } = require("../src/commands/mysql");
 const { runNodeToolCommand } = require("../src/commands/node-tools");
 const { runXamppCommand } = require("../src/commands/xampp");
+const { runProjectListCommand } = require("../src/commands/project-list");
 
 test("ip command prints the detected address", () => {
   const originalLog = console.log;
@@ -118,4 +119,25 @@ test("xampp switch forwards the requested version", async () => {
   });
 
   assert.equal(requestedVersion, "8.1");
+});
+
+test("project selection does not start XAMPP for Laravel or PHP projects", async () => {
+  const opened = [];
+  let xamppStarted = false;
+
+  await runProjectListCommand({
+    getSavedProjects: () => [
+      { path: "C:\\projects\\laravel-app", type: "laravel" },
+      { path: "C:\\projects\\php-app", type: "php" },
+    ],
+    openProjectPicker: () => 0,
+    prepareXamppForLaravelProject: async () => {
+      xamppStarted = true;
+    },
+    tryOpenInVsCode: (projectPath) => opened.push(projectPath),
+    isWindows: true,
+  });
+
+  assert.equal(xamppStarted, false);
+  assert.deepEqual(opened, ["C:\\projects\\laravel-app"]);
 });

@@ -75,9 +75,6 @@ const {
   createXamppPathResolver,
   createXamppProjectBrowser,
   createXamppSwitch,
-  getXamppSwitchVersionCandidate,
-  isXamppRunning,
-  waitForReady: waitForXamppReady,
   waitForStopped: waitForXamppStopped,
 } = require("./src/services/xampp");
 const { getXamppPathCandidates, resolveXamppHtdocsPath, resolveXamppPhpIniPath } =
@@ -253,34 +250,6 @@ function runCommandInDir(command, args, cwd) {
     cwd,
     stdio: "inherit",
   });
-
-  return true;
-}
-
-async function prepareXamppForLaravelProject(selectedProject) {
-  const selectedPhpVersion = getXamppSwitchVersionCandidate(selectedProject.phpVersion);
-
-  const xamppRunning = await isXamppRunning();
-  if (xamppRunning) {
-    console.log(chalk.cyan("Stopping XAMPP before switching versions..."));
-    await runXamppStopByPlatform();
-  }
-
-  if (selectedPhpVersion) {
-    console.log(chalk.cyan(`Switching XAMPP to PHP ${selectedPhpVersion}...`));
-    await runXamppSwitch(selectedPhpVersion);
-  } else {
-    console.log(chalk.cyan("Starting XAMPP..."));
-    runXamppStartByPlatform();
-  }
-
-  console.log(chalk.cyan("Waiting for XAMPP to become ready..."));
-  const ready = await waitForXamppReady(waitForTcpPort);
-  if (!ready) {
-    console.log(chalk.red("❌ XAMPP did not become ready in time"));
-    console.log(chalk.yellow("Please start XAMPP manually, then try opening the project again."));
-    return false;
-  }
 
   return true;
 }
@@ -1266,7 +1235,6 @@ async function main() {
           getSavedProjects,
           formatShortDateOnly,
           askQuestion,
-          prepareXamppForLaravelProject,
           tryOpenInVsCode,
           openProjectPicker,
           isWindows: process.platform === "win32",
